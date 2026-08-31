@@ -1,4 +1,31 @@
-# KMSCON
+# Faceplate
+
+> **Phase 0:** Faceplate is being established as a downstream project derived
+> from [kmscon](https://github.com/kmscon/kmscon). The inherited binary and
+> configuration still use the kmscon names at this baseline; product renaming
+> will land as a separate, reviewable change.
+
+Faceplate is a designed local console for Linux appliances, developed and
+maintained by Dataplicity. It renders a real terminal inside a fixed appliance
+scene directly through DRM/KMS, OpenGL ES, or fbdev without requiring X11,
+Wayland, a desktop environment, or a window manager.
+
+The core project is deliberately unbranded at runtime. Dataplicity and OEM
+logos are supplied through separately licensed theme packages and are not
+compiled into the Faceplate binary. See [BRANDING.md](BRANDING.md).
+
+Faceplate preserves kmscon's Git history, copyright notices, and licences. See
+[UPSTREAM.md](UPSTREAM.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md),
+and [COPYING](COPYING).
+
+## Current baseline
+
+- Upstream repository: `https://github.com/kmscon/kmscon.git`
+- Upstream commit: `791e659f2420e00cda7c39b4eb53f3c2844b4885`
+- Faceplate renderer changes: not yet applied
+- Default visual identity: neutral
+
+## Upstream kmscon documentation
 
 ![Build Status](https://github.com/kmscon/kmscon/actions/workflows/meson.yml/badge.svg?branch=main)
 
