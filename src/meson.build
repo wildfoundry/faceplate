@@ -85,10 +85,3 @@ executable(
     install: true,
     install_dir: bindir,
 )
-
-executable(
-    'faceplate-collector',
-    'faceplate_collector.c',
-    install: true,
-    install_dir: bindir,
-)
