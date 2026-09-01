@@ -113,7 +113,9 @@ struct kmscon_terminal {
 	bool blinking;
 	bool cursor_blinking;
 	struct faceplate_sources *status_sources;
+	struct faceplate_display_context status_context;
 	char status_line[160];
+	bool status_context_valid;
 
 	struct kmscon_asciinema *asciinema;
 };
@@ -133,24 +135,107 @@ static uint64_t boottime_ms(void)
 	return (uint64_t)now.tv_sec * 1000 + (uint64_t)now.tv_nsec / 1000000;
 }
 
-static void status_event(struct ev_timer *timer, uint64_t count, void *data)
+static bool screen_looks_like_login(struct tsm_screen *con)
 {
-	struct kmscon_terminal *term = data;
-	struct faceplate_display_context context;
+	const struct tsm_screen_cell *cells;
+	unsigned int cols, rows, y, x, i;
+	char rowbuf[256];
+	static const char needle[] = "login:";
+
+	if (!con)
+		return true;
+	cells = tsm_screen_draw2(con);
+	if (!cells)
+		return true;
+	cols = tsm_screen_get_width(con);
+	rows = tsm_screen_get_height(con);
+	if (!cols || !rows)
+		return true;
+
+	/* Prefer an explicit login prompt; fall back to sparse upper screen. */
+	for (y = 0; y < rows && y < 8; ++y) {
+		size_t n = cols < sizeof(rowbuf) - 1 ? cols : sizeof(rowbuf) - 1;
+		for (x = 0; x < n; ++x) {
+			uint32_t ch = cells[y * cols + x].ch;
+			rowbuf[x] = (ch >= 32 && ch < 127) ? (char)ch : ' ';
+		}
+		rowbuf[n] = '\0';
+		if (strstr(rowbuf, needle))
+			return true;
+	}
+
+	/* Sparse content near the top (typical getty) → idle face. */
+	{
+		unsigned int nonempty = 0, scanned = 0;
+		unsigned int limit = rows < 6 ? rows : 6;
+		for (y = 0; y < limit; ++y) {
+			for (x = 0; x < cols; ++x) {
+				uint32_t ch = cells[y * cols + x].ch;
+				++scanned;
+				if (ch && ch != ' ')
+					++nonempty;
+			}
+		}
+		if (scanned && nonempty * 20 < scanned)
+			return true;
+	}
+
+	/* Cursor still in the first few rows often means login / short banner. */
+	i = tsm_screen_get_cursor_y(con);
+	if (i <= 2) {
+		unsigned int nonempty = 0;
+		for (y = 0; y < rows; ++y) {
+			for (x = 0; x < cols; ++x) {
+				uint32_t ch = cells[y * cols + x].ch;
+				if (ch && ch != ' ')
+					++nonempty;
+			}
+		}
+		if (nonempty < cols * 2)
+			return true;
+	}
+	return false;
+}
+
+static void apply_faceplate_chrome(struct kmscon_terminal *term)
+{
 	struct shl_dlist *iter;
 	struct screen *scr;
+	bool idle = screen_looks_like_login(term->console);
+	const struct faceplate_display_context *context = &term->status_context;
 
-	(void)timer;
-	(void)count;
-	faceplate_sources_refresh(term->status_sources, boottime_ms(), &context);
-	strncpy(term->status_line, context.device_line, sizeof(term->status_line) - 1);
-	term->status_line[sizeof(term->status_line) - 1] = '\0';
 	shl_dlist_for_each(iter, &term->screens)
 	{
 		scr = shl_dlist_entry(iter, struct screen, list);
-		kmscon_text_set_detail(scr->txt, context.system_line);
+		kmscon_text_set_chrome_idle(scr->txt, idle);
+		if (!term->status_context_valid)
+			continue;
+		kmscon_text_set_faceplate_status(
+			scr->txt, context->hostname, context->connection_label,
+			context->supporting_line, context->secondary_line, context->compact_line,
+			context->connection_alert, context->rauc_unhealthy);
 	}
+}
 
+static void status_event(struct ev_timer *timer, uint64_t count, void *data)
+{
+	struct kmscon_terminal *term = data;
+
+	(void)timer;
+	(void)count;
+	faceplate_sources_refresh(term->status_sources, boottime_ms(), &term->status_context);
+	term->status_context_valid = true;
+	strncpy(term->status_line,
+		term->status_context.compact_line[0] ? term->status_context.compact_line
+						     : term->status_context.supporting_line,
+		sizeof(term->status_line) - 1);
+	term->status_line[sizeof(term->status_line) - 1] = '\0';
+	apply_faceplate_chrome(term);
+	log_notice("faceplate chrome %s status=%s host=%s facts='%s' footer='%s' rauc_alert=%d",
+		   screen_looks_like_login(term->console) ? "idle" : "active",
+		   term->status_context.connection_label, term->status_context.hostname,
+		   term->status_context.supporting_line, term->status_context.secondary_line,
+		   (int)term->status_context.rauc_unhealthy);
 	redraw_all(term);
 }
 
@@ -353,6 +438,7 @@ static void do_redraw_screen(struct screen *scr)
 	scr->pending = false;
 
 	tsm_vte_get_def_attr(scr->term->vte, &attr);
+	apply_faceplate_chrome(scr->term);
 	kmscon_text_prepare(scr->txt, &attr, scr->term->blinking);
 	kmscon_text_set_status(scr->txt, scr->term->status_line);
 	kmscon_text_draw(scr->txt, scr->term->console, scr->term->cursor_blinking);

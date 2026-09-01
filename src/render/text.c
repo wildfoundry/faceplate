@@ -472,7 +472,7 @@ static struct video_buffer *load_logo(const char *path)
 		goto out;
 	image.version = PNG_IMAGE_VERSION;
 	if (!png_image_begin_read_from_stdio(&image, file) || image.width > 512 ||
-	    image.height > 32)
+	    image.height > 96)
 		goto out;
 	image.format = PNG_FORMAT_RGBA;
 	rgba = malloc(PNG_IMAGE_SIZE(image));
@@ -512,6 +512,41 @@ void kmscon_text_set_identity(struct kmscon_text *txt, const char *title, const 
 	txt->chrome_context[sizeof(txt->chrome_context) - 1] = '\0';
 	free(txt->chrome_logo);
 	txt->chrome_logo = load_logo(logo_path);
+	txt->chrome_idle = true;
+}
+
+void kmscon_text_set_chrome_idle(struct kmscon_text *txt, bool idle)
+{
+	if (!txt)
+		return;
+	txt->chrome_idle = idle;
+}
+
+void kmscon_text_set_faceplate_status(struct kmscon_text *txt, const char *hostname,
+				      const char *status, const char *supporting,
+				      const char *secondary, const char *compact,
+				      bool connection_alert, bool rauc_alert)
+{
+	if (!txt)
+		return;
+	strncpy(txt->identity_hostname, hostname ? hostname : "",
+		sizeof(txt->identity_hostname) - 1);
+	txt->identity_hostname[sizeof(txt->identity_hostname) - 1] = '\0';
+	strncpy(txt->identity_status, status ? status : "", sizeof(txt->identity_status) - 1);
+	txt->identity_status[sizeof(txt->identity_status) - 1] = '\0';
+	strncpy(txt->identity_supporting, supporting ? supporting : "",
+		sizeof(txt->identity_supporting) - 1);
+	txt->identity_supporting[sizeof(txt->identity_supporting) - 1] = '\0';
+	strncpy(txt->identity_secondary, secondary ? secondary : "",
+		sizeof(txt->identity_secondary) - 1);
+	txt->identity_secondary[sizeof(txt->identity_secondary) - 1] = '\0';
+	strncpy(txt->identity_compact, compact ? compact : "", sizeof(txt->identity_compact) - 1);
+	txt->identity_compact[sizeof(txt->identity_compact) - 1] = '\0';
+	txt->connection_alert = connection_alert;
+	txt->rauc_alert = rauc_alert;
+	strncpy(txt->detail_line, hostname ? hostname : "", sizeof(txt->detail_line) - 1);
+	txt->detail_line[sizeof(txt->detail_line) - 1] = '\0';
+	kmscon_text_set_status(txt, compact && *compact ? compact : supporting);
 }
 
 void kmscon_text_set_detail(struct kmscon_text *txt, const char *line)
