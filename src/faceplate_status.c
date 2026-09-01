@@ -51,9 +51,8 @@ static bool serial_valid(const char *value, size_t len)
 		return false;
 	for (i = 0; i < len; ++i) {
 		unsigned char c = value[i];
-		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-		    (c >= '0' && c <= '9') || c == '.' || c == '_' || c == ':' ||
-		    c == '/' || c == '-')
+		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+		    c == '.' || c == '_' || c == ':' || c == '/' || c == '-')
 			continue;
 		return false;
 	}
@@ -95,8 +94,8 @@ static bool take_line(const char **cursor, const char *end, const char **line, s
 	return true;
 }
 
-static bool prefixed_value(const char *line, size_t len, const char *prefix,
-			   const char **value, size_t *value_len)
+static bool prefixed_value(const char *line, size_t len, const char *prefix, const char **value,
+			   size_t *value_len)
 {
 	size_t prefix_len = strlen(prefix);
 
@@ -117,8 +116,7 @@ static bool parse_snapshot(const char *bytes, size_t len,
 	size_t line_len;
 	size_t value_len;
 
-	if (!take_line(&cursor, end, &line, &line_len) ||
-	    line_len != sizeof(STATUS_HEADER) - 1 ||
+	if (!take_line(&cursor, end, &line, &line_len) || line_len != sizeof(STATUS_HEADER) - 1 ||
 	    memcmp(line, STATUS_HEADER, sizeof(STATUS_HEADER) - 1))
 		return false;
 	if (!take_line(&cursor, end, &line, &line_len) ||
@@ -147,12 +145,9 @@ static bool parse_snapshot(const char *bytes, size_t len,
 	return cursor == end;
 }
 
-enum faceplate_status_visibility faceplate_status_read_at(
-	int directory_fd,
-	uid_t expected_uid,
-	uint64_t now_boottime_ms,
-	uint64_t stale_after_ms,
-	struct faceplate_status_snapshot *snapshot)
+enum faceplate_status_visibility
+faceplate_status_read_at(int directory_fd, uid_t expected_uid, uint64_t now_boottime_ms,
+			 uint64_t stale_after_ms, struct faceplate_status_snapshot *snapshot)
 {
 	char bytes[FACEPLATE_STATUS_MAX_BYTES + 1];
 	struct stat statbuf;
