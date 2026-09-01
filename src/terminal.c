@@ -43,8 +43,8 @@
 #include "asciinema.h"
 #include "conf.h"
 #include "config.h"
-#include "faceplate_status.h"
 #include "faceplate_sources.h"
+#include "faceplate_status.h"
 #include "font/font.h"
 #include "input/input.h"
 #include "issue.h"
@@ -145,7 +145,8 @@ static void status_event(struct ev_timer *timer, uint64_t count, void *data)
 	faceplate_sources_refresh(term->status_sources, boottime_ms(), &context);
 	strncpy(term->status_line, context.device_line, sizeof(term->status_line) - 1);
 	term->status_line[sizeof(term->status_line) - 1] = '\0';
-	shl_dlist_for_each(iter, &term->screens) {
+	shl_dlist_for_each(iter, &term->screens)
+	{
 		scr = shl_dlist_entry(iter, struct screen, list);
 		kmscon_text_set_detail(scr->txt, context.system_line);
 	}
