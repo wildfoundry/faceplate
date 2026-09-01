@@ -161,13 +161,13 @@ static void compute_advance_and_offset(struct kmscon_text *txt)
 		gt->advance_x = 2.0 / gt->sw * FONT_WIDTH(txt);
 		gt->advance_y = 2.0 / gt->sh * FONT_HEIGHT(txt);
 		off_x = (gt->sw - txt->cols * FONT_WIDTH(txt)) / 2;
-		off_y = (gt->sh - txt->rows * FONT_HEIGHT(txt)) / 2;
+		off_y = (gt->sh - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
 		gt->off_x = (float)2.0 * off_x / gt->sw;
 		gt->off_y = (float)2.0 * off_y / gt->sh;
 	} else {
 		gt->advance_x = 2.0 / gt->sh * FONT_WIDTH(txt);
 		gt->advance_y = 2.0 / gt->sw * FONT_HEIGHT(txt);
-		off_x = (gt->sw - txt->rows * FONT_HEIGHT(txt)) / 2;
+		off_x = (gt->sw - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
 		off_y = (gt->sh - txt->cols * FONT_WIDTH(txt)) / 2;
 		gt->off_x = (float)2.0 * off_y / gt->sh;
 		gt->off_y = (float)2.0 * off_x / gt->sw;
@@ -229,6 +229,10 @@ static int gltex_set(struct kmscon_text *txt)
 		txt->max_cols = gt->sh / FONT_WIDTH(txt);
 		txt->max_rows = gt->sw / FONT_HEIGHT(txt);
 	}
+	if (txt->max_cols > 4)
+		txt->max_cols -= 4;
+	if (txt->max_rows > 4)
+		txt->max_rows -= 4;
 	txt->cols = txt->max_cols;
 	txt->rows = txt->max_rows;
 	compute_advance_and_offset(txt);
@@ -351,7 +355,7 @@ try_next:
 
 	log_debug("new atlas of size %ux%u for %zu", width, height, newsize);
 
-	nsize = txt->max_cols * txt->max_rows + 1; // +1 for the mouse pointer
+	nsize = txt->max_cols * (txt->max_rows + 2) + 1; // status rail + pointer
 
 	atlas->cache_pos = malloc(sizeof(GLfloat) * nsize * 2 * 6);
 	if (!atlas->cache_pos)
@@ -511,7 +515,7 @@ static int gltex_prepare(struct kmscon_text *txt, struct tsm_screen_attr *attr)
 	}
 	gt->attr = *attr;
 
-	glClearColor(gt->attr.br / 255.0, gt->attr.bg / 255.0, gt->attr.bb / 255.0, 1);
+	glClearColor(8.0 / 255.0, 12.0 / 255.0, 20.0 / 255.0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
 	return 0;
 }
@@ -610,6 +614,25 @@ static int gltex_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 			} else
 				gltex_draw_cell(txt, &cells[off], posx, posy);
 		}
+	}
+	return 0;
+}
+
+static int gltex_draw_status(struct kmscon_text *txt, const char *line)
+{
+	struct tsm_screen_cell cell = {0};
+	unsigned int x;
+	size_t len = strlen(line);
+
+	cell.fg.r = 180;
+	cell.fg.g = 196;
+	cell.fg.b = 220;
+	cell.bg.r = 8;
+	cell.bg.g = 12;
+	cell.bg.b = 20;
+	for (x = 0; x < txt->cols; ++x) {
+		cell.ch = x < len ? (unsigned char)line[x] : ' ';
+		gltex_draw_cell(txt, &cell, x, txt->rows + 1);
 	}
 	return 0;
 }
@@ -766,6 +789,7 @@ struct kmscon_text_ops kmscon_text_gltex_ops = {
 	.rotate = gltex_rotate,
 	.prepare = gltex_prepare,
 	.draw = gltex_draw,
+	.draw_status = gltex_draw_status,
 	.draw_pointer = gltex_draw_pointer,
 	.render = gltex_render,
 	.abort = NULL,

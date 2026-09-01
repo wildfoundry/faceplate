@@ -31,14 +31,19 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <libtsm.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 #include "asciinema.h"
 #include "conf.h"
 #include "config.h"
+#include "faceplate_status.h"
 #include "font/font.h"
 #include "input/input.h"
 #include "issue.h"
@@ -103,16 +108,65 @@ struct kmscon_terminal {
 
 	struct ev_timer *blink_timer;
 	struct ev_timer *blink_cursor;
+	struct ev_timer *status_timer;
 	bool blinking;
 	bool cursor_blinking;
+	int status_dir_fd;
+	uid_t status_uid;
+	bool status_uid_valid;
+	char status_line[160];
 
 	struct kmscon_asciinema *asciinema;
 };
 
 #define BLINK_TIMER_NS (500 * 1000 * 1000) // Blinking interval 500ms
 #define BLINK_CURSOR_TYPING 1		   // After keypress, wait 1s before blinking the cursor
+#define STATUS_STALE_MS (30ULL * 1000)
 
 static int font_set(struct kmscon_terminal *term);
+static void redraw_all(struct kmscon_terminal *term);
+
+static uint64_t boottime_ms(void)
+{
+	struct timespec now;
+
+	if (clock_gettime(CLOCK_BOOTTIME, &now))
+		return 0;
+	return (uint64_t)now.tv_sec * 1000 + (uint64_t)now.tv_nsec / 1000000;
+}
+
+static void status_event(struct ev_timer *timer, uint64_t count, void *data)
+{
+	struct kmscon_terminal *term = data;
+	struct faceplate_status_snapshot snapshot;
+	const char *connection;
+
+	(void)timer;
+	(void)count;
+	term->status_line[0] = '\0';
+	if (!term->status_uid_valid)
+		goto redraw;
+	if (term->status_dir_fd < 0)
+		term->status_dir_fd =
+			open("/run/dataplicity", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (term->status_dir_fd < 0)
+		goto redraw;
+	if (faceplate_status_read_at(term->status_dir_fd, term->status_uid, boottime_ms(),
+				     STATUS_STALE_MS, &snapshot) == FACEPLATE_STATUS_HIDDEN)
+		goto redraw;
+
+	if (snapshot.connection == FACEPLATE_CONNECTION_CONNECTED)
+		connection = "Online";
+	else if (snapshot.connection == FACEPLATE_CONNECTION_DISCONNECTED)
+		connection = "Offline";
+	else
+		connection = "Unknown";
+	snprintf(term->status_line, sizeof(term->status_line), "Device %s  |  Dataplicity %s",
+		 snapshot.serial, connection);
+
+redraw:
+	redraw_all(term);
+}
 
 static void coord_to_cell(struct kmscon_terminal *term, int32_t x, int32_t y, unsigned int *posx,
 			  unsigned int *posy)
@@ -314,6 +368,7 @@ static void do_redraw_screen(struct screen *scr)
 
 	tsm_vte_get_def_attr(scr->term->vte, &attr);
 	kmscon_text_prepare(scr->txt, &attr, scr->term->blinking);
+	kmscon_text_set_status(scr->txt, scr->term->status_line);
 	kmscon_text_draw(scr->txt, scr->term->console, scr->term->cursor_blinking);
 	draw_pointer(scr);
 	kmscon_text_render(scr->txt);
@@ -1218,6 +1273,9 @@ void terminal_destroy(struct kmscon_terminal *term)
 	rm_all_screens(term);
 	ev_eloop_rm_timer(term->blink_timer);
 	ev_eloop_rm_timer(term->blink_cursor);
+	ev_eloop_rm_timer(term->status_timer);
+	if (term->status_dir_fd >= 0)
+		close(term->status_dir_fd);
 	kmscon_asciinema_free(term->asciinema);
 	input_unregister_pointer_cb(term->input, pointer_event, term);
 	input_unregister_key_cb(term->input, input_event, term);
@@ -1290,10 +1348,18 @@ struct kmscon_terminal *terminal_new(struct kmscon_session *session, unsigned in
 	term->session = session;
 	term->eloop = eloop;
 	term->input = input;
+	term->status_dir_fd = -1;
 	shl_dlist_init(&term->screens);
 
 	term->conf_ctx = conf_ctx;
 	term->conf = conf_ctx_get_mem(term->conf_ctx);
+	{
+		struct passwd *pw = getpwnam("dpagent");
+		if (pw) {
+			term->status_uid = pw->pw_uid;
+			term->status_uid_valid = true;
+		}
+	}
 
 	strncpy(term->font_attr.name, term->conf->font_name, KMSCON_FONT_MAX_NAME - 1);
 	term->font_attr.height = term->conf->font_size;
@@ -1357,6 +1423,16 @@ struct kmscon_terminal *terminal_new(struct kmscon_session *session, unsigned in
 			goto err_pointer;
 		ret = ev_eloop_new_timer(term->eloop, &term->blink_cursor, &blink_interval,
 					 cursor_blink_event, term);
+		if (ret)
+			goto err_blink;
+	}
+	{
+		struct itimerspec status_interval = {
+			.it_interval = {5, 0},
+			.it_value = {0, 1},
+		};
+		ret = ev_eloop_new_timer(term->eloop, &term->status_timer, &status_interval,
+					 status_event, term);
 		if (ret)
 			goto err_blink;
 	}

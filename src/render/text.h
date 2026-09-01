@@ -67,6 +67,8 @@ struct kmscon_text {
 	bool rendering;
 	enum Orientation orientation;
 	bool blinking;
+	char status_line[160];
+	bool status_visible;
 };
 
 struct kmscon_cursor {
@@ -88,6 +90,7 @@ struct kmscon_text_ops {
 	int (*prepare)(struct kmscon_text *txt, struct tsm_screen_attr *attr);
 	int (*draw)(struct kmscon_text *txt, const struct tsm_screen_cell *cells,
 		    struct kmscon_cursor *cursor);
+	int (*draw_status)(struct kmscon_text *txt, const char *line);
 	int (*draw_pointer)(struct kmscon_text *txt, unsigned int x, unsigned int y);
 	int (*render)(struct kmscon_text *txt);
 	void (*abort)(struct kmscon_text *txt);
@@ -114,6 +117,7 @@ int kmscon_text_rotate(struct kmscon_text *txt, enum Orientation orientation);
 
 int kmscon_text_prepare(struct kmscon_text *txt, struct tsm_screen_attr *attr, bool blinking);
 int kmscon_text_draw(struct kmscon_text *txt, struct tsm_screen *con, bool cursor_blink);
+void kmscon_text_set_status(struct kmscon_text *txt, const char *line);
 int kmscon_text_draw_pointer(struct kmscon_text *txt, unsigned int x, unsigned int y);
 int kmscon_text_render(struct kmscon_text *txt);
 void kmscon_text_abort(struct kmscon_text *txt);
