@@ -27,11 +27,8 @@ struct faceplate_status_snapshot {
 	uint64_t updated_boottime_ms;
 };
 
-enum faceplate_status_visibility faceplate_status_read_at(
-	int directory_fd,
-	uid_t expected_uid,
-	uint64_t now_boottime_ms,
-	uint64_t stale_after_ms,
-	struct faceplate_status_snapshot *snapshot);
+enum faceplate_status_visibility
+faceplate_status_read_at(int directory_fd, uid_t expected_uid, uint64_t now_boottime_ms,
+			 uint64_t stale_after_ms, struct faceplate_status_snapshot *snapshot);
 
 #endif
