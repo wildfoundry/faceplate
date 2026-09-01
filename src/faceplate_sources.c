@@ -269,13 +269,13 @@ static void refresh_system(const struct source *source, uint64_t now,
 	if (!updated || updated > now || now - updated > source->stale_ms)
 		return;
 
-	strncpy(ctx->hostname, host, sizeof(ctx->hostname) - 1);
-	strncpy(ctx->ip, ip, sizeof(ctx->ip) - 1);
-	strncpy(ctx->image, os[0] ? os : (image[0] ? image : ""), sizeof(ctx->image) - 1);
+	snprintf(ctx->hostname, sizeof(ctx->hostname), "%s", host);
+	snprintf(ctx->ip, sizeof(ctx->ip), "%s", ip);
+	snprintf(ctx->image, sizeof(ctx->image), "%s", os[0] ? os : (image[0] ? image : ""));
 	snprintf(ctx->uptime_label, sizeof(ctx->uptime_label), "Uptime %llus",
 		 (unsigned long long)uptime);
-	strncpy(ctx->rauc_slot, slot, sizeof(ctx->rauc_slot) - 1);
-	strncpy(ctx->rauc_boot, boot, sizeof(ctx->rauc_boot) - 1);
+	snprintf(ctx->rauc_slot, sizeof(ctx->rauc_slot), "%s", slot);
+	snprintf(ctx->rauc_boot, sizeof(ctx->rauc_boot), "%s", boot);
 	ctx->rauc_unhealthy = slot[0] && boot[0] && !rauc_boot_is_healthy(boot);
 }
 

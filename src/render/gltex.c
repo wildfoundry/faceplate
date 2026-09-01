@@ -630,17 +630,6 @@ static int gltex_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 	return 0;
 }
 
-static bool chrome_line_empty(const char *s)
-{
-	if (!s)
-		return true;
-	for (; *s; ++s) {
-		if (*s != ' ' && *s != '\t')
-			return false;
-	}
-	return true;
-}
-
 static int gltex_paint_chrome_row(struct kmscon_text *txt, unsigned int y, const char *text,
 				  uint8_t br, uint8_t bg, uint8_t bb, uint8_t r, uint8_t g,
 				  uint8_t b)
