@@ -52,6 +52,7 @@ kmscon_srcs = [
     'seat.c',
     'config.c',
     'faceplate_status.c',
+    'faceplate_sources.c',
     'main.c',
     'terminal.c',
 ]
@@ -66,6 +67,7 @@ kmscon_dep = [
     render_deps,
     font_deps,
     misc_deps,
+    libpng_deps,
 ]
 
 kmscon = executable(
@@ -73,6 +75,20 @@ kmscon = executable(
     kmscon_srcs,
     dependencies: kmscon_dep,
     export_dynamic: true,
+    install: true,
+    install_dir: bindir,
+)
+
+executable(
+    'faceplate-collector',
+    'faceplate_collector.c',
+    install: true,
+    install_dir: bindir,
+)
+
+executable(
+    'faceplate-collector',
+    'faceplate_collector.c',
     install: true,
     install_dir: bindir,
 )
