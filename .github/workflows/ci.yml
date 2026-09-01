@@ -49,7 +49,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            meson ninja-build check jq zlib1g-dev \
+            meson ninja-build check jq zlib1g-dev libpng-dev \
             libudev-dev libxkbcommon-dev libdrm-dev libgbm-dev \
             libegl1-mesa-dev libgles-dev libpango1.0-dev \
             libfreetype6-dev libfontconfig1-dev libsystemd-dev \
@@ -87,7 +87,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y meson ninja-build check zlib1g-dev libudev-dev libxkbcommon-dev
+          sudo apt-get install -y meson ninja-build check zlib1g-dev libpng-dev libudev-dev libxkbcommon-dev
       - name: Configure minimal fbdev/PSF build
         run: >-
           meson setup build-minimal
