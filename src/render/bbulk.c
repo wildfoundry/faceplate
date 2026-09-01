@@ -165,7 +165,7 @@ static int bbulk_set(struct kmscon_text *txt)
 
 	bb->cell_count = txt->max_cols * (txt->max_rows + 2);
 	max_damage_rects =
-		SHL_DIV_ROUND_UP(txt->max_cols, DAMAGE_MERGE_LEN + 1) * (txt->max_rows + 2);
+		SHL_DIV_ROUND_UP(txt->max_cols, DAMAGE_MERGE_LEN + 1) * (txt->max_rows + 2) + 2;
 
 	bb->cells = malloc(sizeof(*bb->cells) * bb->cell_count);
 	if (!bb->cells)
@@ -721,6 +721,17 @@ static void bbulk_compute_damage(struct kmscon_text *txt)
 			prev = DAMAGE_MERGE_LEN;
 		}
 	}
+
+	/* Chrome is redrawn every frame and sits outside the terminal cell grid. */
+	r.x1 = 0;
+	r.y1 = 0;
+	r.x2 = bb->sw;
+	r.y2 = bb->off_y + FACEPLATE_CHROME_TOP_ROWS * fh;
+	add_damage(bb, &r);
+
+	r.y1 = bb->off_y + (FACEPLATE_CHROME_TOP_ROWS + txt->rows) * fh;
+	r.y2 = bb->sh;
+	add_damage(bb, &r);
 }
 static int bbulk_render(struct kmscon_text *txt)
 {
