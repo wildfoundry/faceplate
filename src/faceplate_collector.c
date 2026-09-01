@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: MIT */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
@@ -59,8 +61,8 @@ static void os_image(char *out, size_t cap)
 			if (end)
 				*end = '\0';
 		}
-		if (token_ok(value, 63))
-			strncpy(out, value, cap - 1);
+		if (token_ok(value, 63) && strlen(value) < cap)
+			memcpy(out, value, strlen(value) + 1);
 		break;
 	}
 	fclose(f);
@@ -71,7 +73,8 @@ static unsigned long long uptime_seconds(void)
 	FILE *f = fopen("/proc/uptime", "re");
 	double value = 0;
 	if (f) {
-		(void)fscanf(f, "%lf", &value);
+		if (fscanf(f, "%lf", &value) != 1)
+			value = 0;
 		fclose(f);
 	}
 	return value > 0 ? (unsigned long long)value : 0;
