@@ -76,3 +76,17 @@ test_issue_parameter = executable(
     dependencies: [libtsm_deps, shl_deps],
 )
 test('test_issue_parameter', test_issue_parameter)
+
+test_faceplate_status = executable(
+    'test_faceplate_status',
+    'test_faceplate_status.c',
+    '../src/faceplate_status.c',
+    include_directories: src_inc,
+    dependencies: [check_deps],
+)
+test(
+    'faceplate_status',
+    test_faceplate_status,
+    protocol: 'tap',
+    env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
+)
