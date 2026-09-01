@@ -117,10 +117,13 @@ static void compute_border(struct kmscon_text *txt)
 	if (txt->orientation == OR_NORMAL || txt->orientation == OR_UPSIDE_DOWN) {
 		bb->off_x = (bb->sw - txt->cols * FONT_WIDTH(txt)) / 2;
 		bb->off_y = (bb->sh - (txt->rows + FACEPLATE_CHROME_TOP_ROWS +
-				       FACEPLATE_CHROME_BOTTOM_ROWS) * FONT_HEIGHT(txt)) / 2;
+				       FACEPLATE_CHROME_BOTTOM_ROWS) *
+					      FONT_HEIGHT(txt)) /
+			    2;
 		bb->max_x = bb->off_x + txt->cols * FONT_WIDTH(txt);
-		bb->max_y = bb->off_y + (txt->rows + FACEPLATE_CHROME_TOP_ROWS +
-				     FACEPLATE_CHROME_BOTTOM_ROWS) * FONT_HEIGHT(txt);
+		bb->max_y = bb->off_y +
+			    (txt->rows + FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS) *
+				    FONT_HEIGHT(txt);
 	} else {
 		bb->off_x = (bb->sw - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
 		bb->off_y = (bb->sh - txt->cols * FONT_WIDTH(txt)) / 2;
@@ -425,11 +428,9 @@ static int bbulk_draw_cell(struct kmscon_text *txt, const struct tsm_screen_cell
 		 * next cell, as the glyph is already rotated, so start on the next cell
 		 * and end on this cell
 		 */
-		set_coordinate(txt, &req.x, &req.y, posx + 1,
-			       posy + FACEPLATE_CHROME_TOP_ROWS);
+		set_coordinate(txt, &req.x, &req.y, posx + 1, posy + FACEPLATE_CHROME_TOP_ROWS);
 	else
-		set_coordinate(txt, &req.x, &req.y, posx,
-			       posy + FACEPLATE_CHROME_TOP_ROWS);
+		set_coordinate(txt, &req.x, &req.y, posx, posy + FACEPLATE_CHROME_TOP_ROWS);
 
 	req.w = glyph->buf.width;
 	req.h = glyph->buf.height;
@@ -478,12 +479,17 @@ static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
 	struct kmscon_glyph *glyph;
 	struct video_blend_req req;
 	const char *rows[6] = {txt->chrome_logo ? "" : txt->chrome_title,
-			       txt->chrome_context, "", "",
-			       txt->detail_line, line};
-	unsigned int logical_rows[6] = {0, 2, 3,
-		FACEPLATE_CHROME_TOP_ROWS + txt->rows,
-		FACEPLATE_CHROME_TOP_ROWS + txt->rows + 1,
-		FACEPLATE_CHROME_TOP_ROWS + txt->rows + 2};
+			       txt->chrome_context,
+			       "",
+			       "",
+			       txt->detail_line,
+			       line};
+	unsigned int logical_rows[6] = {0,
+					2,
+					3,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 1,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 2};
 	unsigned int i, x;
 
 	for (i = 0; i < 6; ++i) {
@@ -494,9 +500,13 @@ static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
 			cell.fg.g = i == 0 ? 248 : (i == 1 ? 205 : 196);
 			cell.fg.b = 255;
 			if (i == 2 || i == 3) {
-				cell.bg.r = 20; cell.bg.g = 126; cell.bg.b = 180;
+				cell.bg.r = 20;
+				cell.bg.g = 126;
+				cell.bg.b = 180;
 			} else {
-				cell.bg.r = 15; cell.bg.g = 23; cell.bg.b = 42;
+				cell.bg.r = 15;
+				cell.bg.g = 23;
+				cell.bg.b = 42;
 			}
 			glyph = find_glyph(txt, &cell);
 			if (!glyph)
@@ -515,8 +525,12 @@ static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
 		req.y = ((struct bbulk *)txt->data)->off_y;
 		req.w = txt->chrome_logo->width;
 		req.h = txt->chrome_logo->height;
-		req.fr = 244; req.fg = 248; req.fb = 255;
-		req.br = 15; req.bg = 23; req.bb = 42;
+		req.fr = 244;
+		req.fg = 248;
+		req.fb = 255;
+		req.br = 15;
+		req.bg = 23;
+		req.bb = 42;
 		display_blend(txt->disp, &req);
 	}
 	return 0;
@@ -695,8 +709,7 @@ static void bbulk_compute_damage(struct kmscon_text *txt)
 					prev--;
 				continue;
 			}
-			set_coordinate(txt, &x1, &y1, posx,
-				       posy + FACEPLATE_CHROME_TOP_ROWS);
+			set_coordinate(txt, &x1, &y1, posx, posy + FACEPLATE_CHROME_TOP_ROWS);
 			r.x1 = x1;
 			r.y1 = y1;
 			r.x2 = x1 + fw;
