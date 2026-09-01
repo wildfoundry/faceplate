@@ -76,7 +76,7 @@ struct kmscon_text {
 	/* Idle = login face; active = compact right rail. */
 	bool chrome_idle;
 	char identity_hostname[64];
-	char identity_status[24]; /* Online / Offline / Unknown — lead signal */
+	char identity_status[24];      /* Online / Offline / Unknown — lead signal */
 	char identity_supporting[160]; /* labeled facts: IP … | OS … */
 	char identity_secondary[160];
 	char identity_compact[160];
@@ -102,10 +102,9 @@ struct kmscon_text {
 #define FACEPLATE_CHROME_PAD_ROWS 1
 /* Empty page rows between card bottom and footer. */
 #define FACEPLATE_CHROME_FOOTER_GAP_ROWS 2
-#define FACEPLATE_CHROME_CARD_Y0 \
-	(FACEPLATE_CHROME_BRAND_ROWS + FACEPLATE_CHROME_BRAND_GAP_ROWS)
+#define FACEPLATE_CHROME_CARD_Y0 (FACEPLATE_CHROME_BRAND_ROWS + FACEPLATE_CHROME_BRAND_GAP_ROWS)
 #define FACEPLATE_CHROME_TOP_ROWS (FACEPLATE_CHROME_CARD_Y0 + FACEPLATE_CHROME_PAD_ROWS)
-#define FACEPLATE_CHROME_BOTTOM_ROWS \
+#define FACEPLATE_CHROME_BOTTOM_ROWS                                                               \
 	(FACEPLATE_CHROME_PAD_ROWS + FACEPLATE_CHROME_FOOTER_GAP_ROWS + 1)
 /* Page gutters outside the card (total cells subtracted from width). */
 #define FACEPLATE_CHROME_HORIZONTAL_CELLS 14

@@ -236,7 +236,7 @@ static int gltex_set(struct kmscon_text *txt)
 	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS)
 		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS;
 	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
-				     FACEPLATE_CHROME_SAFE_MARGIN_ROWS)
+				    FACEPLATE_CHROME_SAFE_MARGIN_ROWS)
 		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
 				 FACEPLATE_CHROME_SAFE_MARGIN_ROWS;
 	txt->cols = txt->max_cols;
@@ -743,8 +743,9 @@ static int gltex_draw_status(struct kmscon_text *txt, const char *line)
 			fg = FACEPLATE_ONLINE_FG_G;
 			fb = FACEPLATE_ONLINE_FG_B;
 		}
-		gltex_paint_chrome_row_right(txt, 0, right_x0, right_cols, compact, FACEPLATE_PAGE_R,
-					     FACEPLATE_PAGE_G, FACEPLATE_PAGE_B, fr, fg, fb);
+		gltex_paint_chrome_row_right(txt, 0, right_x0, right_cols, compact,
+					     FACEPLATE_PAGE_R, FACEPLATE_PAGE_G, FACEPLATE_PAGE_B,
+					     fr, fg, fb);
 	}
 
 	fr = FACEPLATE_MUTED_FG_R;

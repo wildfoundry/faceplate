@@ -210,11 +210,10 @@ static void apply_faceplate_chrome(struct kmscon_terminal *term)
 		kmscon_text_set_chrome_idle(scr->txt, idle);
 		if (!term->status_context_valid)
 			continue;
-		kmscon_text_set_faceplate_status(scr->txt, context->hostname,
-						 context->connection_label,
-						 context->supporting_line, context->secondary_line,
-						 context->compact_line, context->connection_alert,
-						 context->rauc_unhealthy);
+		kmscon_text_set_faceplate_status(
+			scr->txt, context->hostname, context->connection_label,
+			context->supporting_line, context->secondary_line, context->compact_line,
+			context->connection_alert, context->rauc_unhealthy);
 	}
 }
 

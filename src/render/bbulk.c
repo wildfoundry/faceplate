@@ -173,7 +173,7 @@ static int bbulk_set(struct kmscon_text *txt)
 	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS)
 		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS;
 	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
-				     FACEPLATE_CHROME_SAFE_MARGIN_ROWS)
+				    FACEPLATE_CHROME_SAFE_MARGIN_ROWS)
 		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
 				 FACEPLATE_CHROME_SAFE_MARGIN_ROWS;
 	txt->cols = txt->max_cols;
@@ -492,20 +492,9 @@ static int bbulk_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 	return 0;
 }
 
-static bool chrome_line_empty(const char *s)
-{
-	if (!s)
-		return true;
-	for (; *s; ++s) {
-		if (*s != ' ' && *s != '\t')
-			return false;
-	}
-	return true;
-}
-
-static int paint_chrome_cell(struct kmscon_text *txt, unsigned int gx, unsigned int gy,
-			     uint8_t br, uint8_t bg, uint8_t bb, uint8_t fr, uint8_t fg,
-			     uint8_t fb, unsigned char ch)
+static int paint_chrome_cell(struct kmscon_text *txt, unsigned int gx, unsigned int gy, uint8_t br,
+			     uint8_t bg, uint8_t bb, uint8_t fr, uint8_t fg, uint8_t fb,
+			     unsigned char ch)
 {
 	struct tsm_screen_cell cell = {0};
 	struct kmscon_glyph *glyph;
@@ -648,12 +637,11 @@ static void connection_fg(struct kmscon_text *txt, uint8_t *fr, uint8_t *fg, uin
 }
 
 static void status_fg_for_line(struct kmscon_text *txt, const char *line, uint8_t *fr, uint8_t *fg,
-			      uint8_t *fb)
+			       uint8_t *fb)
 {
 	bool alert = false;
 
-	if (txt->connection_alert && line &&
-	    (strstr(line, "Offline") || strstr(line, "Unknown")))
+	if (txt->connection_alert && line && (strstr(line, "Offline") || strstr(line, "Unknown")))
 		alert = true;
 	if (txt->rauc_alert && line && strstr(line, "RAUC"))
 		alert = true;
@@ -677,8 +665,8 @@ static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
 	unsigned int term_y0 = FACEPLATE_CHROME_TOP_ROWS;
 	unsigned int term_y1 = FACEPLATE_CHROME_TOP_ROWS + txt->rows;
 	unsigned int pad_bottom_y = term_y1;
-	unsigned int secondary_y = term_y1 + FACEPLATE_CHROME_PAD_ROWS +
-				   FACEPLATE_CHROME_FOOTER_GAP_ROWS;
+	unsigned int secondary_y =
+		term_y1 + FACEPLATE_CHROME_PAD_ROWS + FACEPLATE_CHROME_FOOTER_GAP_ROWS;
 	unsigned int y, x;
 	unsigned int card_px, card_py, card_pw, card_ph, logo_y, logo_gap_h;
 	uint8_t fr, fg, fb;
@@ -737,11 +725,10 @@ static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
 		if (ret)
 			return ret;
 		if (FACEPLATE_CHROME_BRAND_ROWS > 1) {
-			ret = paint_chrome_text_right(txt, 1, right_x0, right_cols,
-						      host[0] ? host : "Device", FACEPLATE_PAGE_R,
-						      FACEPLATE_PAGE_G, FACEPLATE_PAGE_B,
-						      FACEPLATE_HOST_FG_R, FACEPLATE_HOST_FG_G,
-						      FACEPLATE_HOST_FG_B);
+			ret = paint_chrome_text_right(
+				txt, 1, right_x0, right_cols, host[0] ? host : "Device",
+				FACEPLATE_PAGE_R, FACEPLATE_PAGE_G, FACEPLATE_PAGE_B,
+				FACEPLATE_HOST_FG_R, FACEPLATE_HOST_FG_G, FACEPLATE_HOST_FG_B);
 			if (ret)
 				return ret;
 		}
@@ -757,8 +744,9 @@ static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
 		status_fg_for_line(txt, compact, &fr, &fg, &fb);
 		if (!txt->connection_alert && !txt->rauc_alert)
 			connection_fg(txt, &fr, &fg, &fb);
-		ret = paint_chrome_text_right(txt, 0, right_x0, right_cols, compact, FACEPLATE_PAGE_R,
-					      FACEPLATE_PAGE_G, FACEPLATE_PAGE_B, fr, fg, fb);
+		ret = paint_chrome_text_right(txt, 0, right_x0, right_cols, compact,
+					      FACEPLATE_PAGE_R, FACEPLATE_PAGE_G, FACEPLATE_PAGE_B,
+					      fr, fg, fb);
 		if (ret)
 			return ret;
 	}
