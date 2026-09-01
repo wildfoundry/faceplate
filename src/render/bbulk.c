@@ -116,11 +116,11 @@ static void compute_border(struct kmscon_text *txt)
 
 	if (txt->orientation == OR_NORMAL || txt->orientation == OR_UPSIDE_DOWN) {
 		bb->off_x = (bb->sw - txt->cols * FONT_WIDTH(txt)) / 2;
-		bb->off_y = (bb->sh - txt->rows * FONT_HEIGHT(txt)) / 2;
+		bb->off_y = (bb->sh - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
 		bb->max_x = bb->off_x + txt->cols * FONT_WIDTH(txt);
 		bb->max_y = bb->off_y + txt->rows * FONT_HEIGHT(txt);
 	} else {
-		bb->off_x = (bb->sw - txt->rows * FONT_HEIGHT(txt)) / 2;
+		bb->off_x = (bb->sw - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
 		bb->off_y = (bb->sh - txt->cols * FONT_WIDTH(txt)) / 2;
 		bb->max_x = bb->off_x + txt->rows * FONT_HEIGHT(txt);
 		bb->max_y = bb->off_y + txt->cols * FONT_WIDTH(txt);
@@ -149,12 +149,17 @@ static int bbulk_set(struct kmscon_text *txt)
 		txt->max_rows = bb->sw / FONT_HEIGHT(txt);
 		txt->max_cols = bb->sh / FONT_WIDTH(txt);
 	}
+	if (txt->max_cols > 4)
+		txt->max_cols -= 4;
+	if (txt->max_rows > 4)
+		txt->max_rows -= 4;
 	txt->cols = txt->max_cols;
 	txt->rows = txt->max_rows;
 	compute_border(txt);
 
-	bb->cell_count = txt->max_cols * txt->max_rows;
-	max_damage_rects = SHL_DIV_ROUND_UP(txt->max_cols, DAMAGE_MERGE_LEN + 1) * txt->max_rows;
+	bb->cell_count = txt->max_cols * (txt->max_rows + 2);
+	max_damage_rects =
+		SHL_DIV_ROUND_UP(txt->max_cols, DAMAGE_MERGE_LEN + 1) * (txt->max_rows + 2);
 
 	bb->cells = malloc(sizeof(*bb->cells) * bb->cell_count);
 	if (!bb->cells)
@@ -462,6 +467,25 @@ static int bbulk_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 	return 0;
 }
 
+static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
+{
+	struct tsm_screen_cell cell = {0};
+	unsigned int x;
+	size_t len = strlen(line);
+
+	cell.fg.r = 180;
+	cell.fg.g = 196;
+	cell.fg.b = 220;
+	cell.bg.r = 8;
+	cell.bg.g = 12;
+	cell.bg.b = 20;
+	for (x = 0; x < txt->cols; ++x) {
+		cell.ch = x < len ? (unsigned char)line[x] : ' ';
+		bbulk_draw_cell(txt, &cell, x, txt->rows + 1);
+	}
+	return 0;
+}
+
 /*
  * When the pointer move over, mark the 4 underlying cells as damaged.
  */
@@ -626,7 +650,7 @@ static void bbulk_compute_damage(struct kmscon_text *txt)
 		fh = FONT_WIDTH(txt);
 	}
 
-	for (posy = 0; posy < txt->rows; posy++) {
+	for (posy = 0; posy < txt->rows + 2; posy++) {
 		prev = 0;
 		for (posx = 0; posx < txt->cols; posx++) {
 			off = posx + posy * txt->cols;
@@ -679,7 +703,7 @@ static int bbulk_prepare(struct kmscon_text *txt, struct tsm_screen_attr *attr)
 	bb->attr = *attr;
 
 	if (bb->redraw) {
-		display_clear(txt->disp, attr->br, attr->bg, attr->bb);
+		display_clear(txt->disp, 8, 12, 20);
 		for (i = 0; i < bb->cell_count; i++)
 			damage_cell(bb, i);
 	} else if (display_has_damage(txt->disp)) {
@@ -706,6 +730,7 @@ struct kmscon_text_ops kmscon_text_bbulk_ops = {
 	.rotate = bbulk_rotate,
 	.prepare = bbulk_prepare,
 	.draw = bbulk_draw,
+	.draw_status = bbulk_draw_status,
 	.draw_pointer = bbulk_draw_pointer,
 	.render = bbulk_render,
 	.abort = NULL,
