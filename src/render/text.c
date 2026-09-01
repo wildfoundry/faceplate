@@ -430,6 +430,20 @@ int kmscon_text_prepare(struct kmscon_text *txt, struct tsm_screen_attr *attr, b
 	return ret;
 }
 
+void kmscon_text_set_status(struct kmscon_text *txt, const char *line)
+{
+	if (!txt)
+		return;
+	if (!line || !*line) {
+		txt->status_line[0] = '\0';
+		txt->status_visible = false;
+		return;
+	}
+	strncpy(txt->status_line, line, sizeof(txt->status_line) - 1);
+	txt->status_line[sizeof(txt->status_line) - 1] = '\0';
+	txt->status_visible = true;
+}
+
 static bool is_cursor_blinking(enum tsm_screen_cursor_style style)
 {
 	return (!style || style & 1);
@@ -493,7 +507,11 @@ int kmscon_text_draw(struct kmscon_text *txt, struct tsm_screen *con, bool curso
 		} else if (is_vbar(style))
 			cursor.cell.ch = FONT_VBAR;
 	}
-	return txt->ops->draw(txt, cells, &cursor);
+	int ret = txt->ops->draw(txt, cells, &cursor);
+
+	if (!ret && txt->ops->draw_status)
+		ret = txt->ops->draw_status(txt, txt->status_visible ? txt->status_line : "");
+	return ret;
 }
 
 /**
