@@ -112,7 +112,7 @@ static int parse_manifest(int dirfd, const char *name, struct source *out)
 		out->kind = SOURCE_SYSTEM;
 	else
 		return -EINVAL;
-	strncpy(out->path, path, sizeof(out->path) - 1);
+	memcpy(out->path, path, strlen(path) + 1);
 	out->uid = pw->pw_uid;
 	out->stale_ms = stale;
 	return 0;
