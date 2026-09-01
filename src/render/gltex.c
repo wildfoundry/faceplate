@@ -233,10 +233,12 @@ static int gltex_set(struct kmscon_text *txt)
 		txt->max_cols = gt->sh / FONT_WIDTH(txt);
 		txt->max_rows = gt->sw / FONT_HEIGHT(txt);
 	}
-	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS)
-		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS;
-	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2)
-		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2;
+	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS)
+		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS;
+	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
+				     FACEPLATE_CHROME_SAFE_MARGIN_ROWS)
+		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
+				 FACEPLATE_CHROME_SAFE_MARGIN_ROWS;
 	txt->cols = txt->max_cols;
 	txt->rows = txt->max_rows;
 	compute_advance_and_offset(txt);
@@ -628,38 +630,133 @@ static int gltex_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 	return 0;
 }
 
-static int gltex_draw_status(struct kmscon_text *txt, const char *line)
+static bool chrome_line_empty(const char *s)
+{
+	if (!s)
+		return true;
+	for (; *s; ++s) {
+		if (*s != ' ' && *s != '\t')
+			return false;
+	}
+	return true;
+}
+
+static int gltex_paint_chrome_row(struct kmscon_text *txt, unsigned int y, const char *text,
+				  uint8_t br, uint8_t bg, uint8_t bb, uint8_t r, uint8_t g,
+				  uint8_t b)
 {
 	struct tsm_screen_cell cell = {0};
-	const char *rows[6] = {
-		txt->chrome_title, txt->chrome_context, "", "", txt->detail_line, line};
-	unsigned int logical_rows[6] = {0,
-					2,
-					3,
-					FACEPLATE_CHROME_TOP_ROWS + txt->rows,
-					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 1,
-					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 2};
-	unsigned int i, x;
+	size_t len = text ? strlen(text) : 0;
+	unsigned int x;
 
-	for (i = 0; i < 6; ++i) {
-		size_t len = strlen(rows[i]);
-		for (x = 0; x < txt->cols; ++x) {
-			cell.ch = x < len ? (unsigned char)rows[i][x] : ' ';
-			cell.fg.r = i == 0 ? 244 : (i == 1 ? 96 : 180);
-			cell.fg.g = i == 0 ? 248 : (i == 1 ? 205 : 196);
-			cell.fg.b = 255;
-			if (i == 2 || i == 3) {
-				cell.bg.r = 20;
-				cell.bg.g = 126;
-				cell.bg.b = 180;
-			} else {
-				cell.bg.r = 15;
-				cell.bg.g = 23;
-				cell.bg.b = 42;
-			}
-			gltex_draw_cell_at(txt, &cell, x, logical_rows[i]);
-		}
+	for (x = 0; x < txt->cols; ++x) {
+		cell.ch = x < len ? (unsigned char)text[x] : ' ';
+		cell.fg.r = r;
+		cell.fg.g = g;
+		cell.fg.b = b;
+		cell.bg.r = br;
+		cell.bg.g = bg;
+		cell.bg.b = bb;
+		gltex_draw_cell_at(txt, &cell, x + FACEPLATE_CHROME_PAD_COLS, y);
 	}
+	return 0;
+}
+
+static int gltex_paint_chrome_row_right(struct kmscon_text *txt, unsigned int y, unsigned int x0,
+					unsigned int max_cols, const char *text, uint8_t br,
+					uint8_t bg, uint8_t bb, uint8_t r, uint8_t g, uint8_t b)
+{
+	struct tsm_screen_cell cell = {0};
+	size_t len = text ? strlen(text) : 0;
+	unsigned int start, x, i;
+
+	if (!len)
+		return 0;
+	if (len > max_cols) {
+		text += len - max_cols;
+		len = max_cols;
+	}
+	start = x0 + max_cols - (unsigned int)len;
+	for (i = 0; i < len; ++i) {
+		x = start + i;
+		cell.ch = (unsigned char)text[i];
+		cell.fg.r = r;
+		cell.fg.g = g;
+		cell.fg.b = b;
+		cell.bg.r = br;
+		cell.bg.g = bg;
+		cell.bg.b = bb;
+		gltex_draw_cell_at(txt, &cell, x, y);
+	}
+	return 0;
+}
+
+static int gltex_draw_status(struct kmscon_text *txt, const char *line)
+{
+	const char *title = txt->chrome_title;
+	unsigned int secondary_y = FACEPLATE_CHROME_TOP_ROWS + txt->rows +
+				   FACEPLATE_CHROME_PAD_ROWS + FACEPLATE_CHROME_FOOTER_GAP_ROWS;
+	const char *host = txt->identity_hostname[0] ? txt->identity_hostname : "Device";
+	const char *status = txt->identity_status[0] ? txt->identity_status : "Unknown";
+	const char *supporting = txt->identity_supporting;
+	const char *secondary = txt->identity_secondary;
+	const char *compact = txt->identity_compact[0] ? txt->identity_compact : line;
+	unsigned int right_x0 = FACEPLATE_CHROME_PAD_COLS;
+	unsigned int right_cols = txt->cols;
+	uint8_t fr, fg, fb;
+
+	(void)line;
+
+	if (!txt->chrome_logo && title[0])
+		gltex_paint_chrome_row(txt, 0, title, FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+				       FACEPLATE_PAGE_B, 244, 248, 255);
+
+	if (txt->chrome_idle) {
+		if (txt->connection_alert) {
+			fr = FACEPLATE_ALERT_FG_R;
+			fg = FACEPLATE_ALERT_FG_G;
+			fb = FACEPLATE_ALERT_FG_B;
+		} else {
+			fr = FACEPLATE_ONLINE_FG_R;
+			fg = FACEPLATE_ONLINE_FG_G;
+			fb = FACEPLATE_ONLINE_FG_B;
+		}
+		gltex_paint_chrome_row_right(txt, 0, right_x0, right_cols, status, FACEPLATE_PAGE_R,
+					     FACEPLATE_PAGE_G, FACEPLATE_PAGE_B, fr, fg, fb);
+		if (FACEPLATE_CHROME_BRAND_ROWS > 1)
+			gltex_paint_chrome_row_right(txt, 1, right_x0, right_cols, host,
+						     FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+						     FACEPLATE_PAGE_B, FACEPLATE_HOST_FG_R,
+						     FACEPLATE_HOST_FG_G, FACEPLATE_HOST_FG_B);
+		if (FACEPLATE_CHROME_BRAND_ROWS > 2)
+			gltex_paint_chrome_row_right(txt, 2, right_x0, right_cols, supporting,
+						     FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+						     FACEPLATE_PAGE_B, FACEPLATE_MUTED_FG_R,
+						     FACEPLATE_MUTED_FG_G, FACEPLATE_MUTED_FG_B);
+	} else {
+		if (txt->connection_alert || txt->rauc_alert) {
+			fr = FACEPLATE_ALERT_FG_R;
+			fg = FACEPLATE_ALERT_FG_G;
+			fb = FACEPLATE_ALERT_FG_B;
+		} else {
+			fr = FACEPLATE_ONLINE_FG_R;
+			fg = FACEPLATE_ONLINE_FG_G;
+			fb = FACEPLATE_ONLINE_FG_B;
+		}
+		gltex_paint_chrome_row_right(txt, 0, right_x0, right_cols, compact, FACEPLATE_PAGE_R,
+					     FACEPLATE_PAGE_G, FACEPLATE_PAGE_B, fr, fg, fb);
+	}
+
+	fr = FACEPLATE_MUTED_FG_R;
+	fg = FACEPLATE_MUTED_FG_G;
+	fb = FACEPLATE_MUTED_FG_B;
+	if (txt->rauc_alert) {
+		fr = FACEPLATE_ALERT_FG_R;
+		fg = FACEPLATE_ALERT_FG_G;
+		fb = FACEPLATE_ALERT_FG_B;
+	}
+	gltex_paint_chrome_row(txt, secondary_y, secondary, FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+			       FACEPLATE_PAGE_B, fr, fg, fb);
 	return 0;
 }
 

@@ -113,24 +113,39 @@ static void damage_cell(struct bbulk *bb, unsigned int off)
 static void compute_border(struct kmscon_text *txt)
 {
 	struct bbulk *bb = txt->data;
+	unsigned int card_cols, content_h, free_h, top_bias;
 
 	if (txt->orientation == OR_NORMAL || txt->orientation == OR_UPSIDE_DOWN) {
-		bb->off_x = (bb->sw - txt->cols * FONT_WIDTH(txt)) / 2;
-		bb->off_y = (bb->sh - (txt->rows + FACEPLATE_CHROME_TOP_ROWS +
-				       FACEPLATE_CHROME_BOTTOM_ROWS) *
-					      FONT_HEIGHT(txt)) /
-			    2;
-		bb->max_x = bb->off_x + txt->cols * FONT_WIDTH(txt);
-		bb->max_y = bb->off_y +
-			    (txt->rows + FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS) *
-				    FONT_HEIGHT(txt);
+		card_cols = txt->cols + 2 * FACEPLATE_CHROME_PAD_COLS;
+		content_h = (txt->rows + FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS) *
+			    FONT_HEIGHT(txt);
+		bb->off_x = (bb->sw - card_cols * FONT_WIDTH(txt)) / 2;
+		/*
+		 * Vertical rhythm: keep a real top inset for logo/identity, and
+		 * leave most leftover space below the footer (overscan + breathing
+		 * room) so nothing is pinned to the physical bottom edge.
+		 */
+		if (bb->sh > content_h) {
+			free_h = bb->sh - content_h;
+			top_bias = free_h / 5;
+			if (top_bias < FONT_HEIGHT(txt))
+				top_bias = FONT_HEIGHT(txt);
+			if (top_bias > free_h / 3)
+				top_bias = free_h / 3;
+			bb->off_y = top_bias;
+		} else {
+			bb->off_y = 0;
+		}
+		bb->max_x = bb->off_x + card_cols * FONT_WIDTH(txt);
+		bb->max_y = bb->off_y + content_h;
 	} else {
 		bb->off_x = (bb->sw - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
 		bb->off_y = (bb->sh - txt->cols * FONT_WIDTH(txt)) / 2;
 		bb->max_x = bb->off_x + txt->rows * FONT_HEIGHT(txt);
 		bb->max_y = bb->off_y + txt->cols * FONT_WIDTH(txt);
 	}
-	display_set_cursor_offset(txt->disp, bb->off_x,
+	display_set_cursor_offset(txt->disp,
+				  bb->off_x + FACEPLATE_CHROME_PAD_COLS * FONT_WIDTH(txt),
 				  bb->off_y + FACEPLATE_CHROME_TOP_ROWS * FONT_HEIGHT(txt));
 }
 
@@ -155,10 +170,12 @@ static int bbulk_set(struct kmscon_text *txt)
 		txt->max_rows = bb->sw / FONT_HEIGHT(txt);
 		txt->max_cols = bb->sh / FONT_WIDTH(txt);
 	}
-	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS)
-		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS;
-	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2)
-		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2;
+	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS)
+		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS + 2 * FACEPLATE_CHROME_PAD_COLS;
+	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
+				     FACEPLATE_CHROME_SAFE_MARGIN_ROWS)
+		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS +
+				 FACEPLATE_CHROME_SAFE_MARGIN_ROWS;
 	txt->cols = txt->max_cols;
 	txt->rows = txt->max_rows;
 	compute_border(txt);
@@ -428,9 +445,11 @@ static int bbulk_draw_cell(struct kmscon_text *txt, const struct tsm_screen_cell
 		 * next cell, as the glyph is already rotated, so start on the next cell
 		 * and end on this cell
 		 */
-		set_coordinate(txt, &req.x, &req.y, posx + 1, posy + FACEPLATE_CHROME_TOP_ROWS);
+		set_coordinate(txt, &req.x, &req.y, posx + 1 + FACEPLATE_CHROME_PAD_COLS,
+			       posy + FACEPLATE_CHROME_TOP_ROWS);
 	else
-		set_coordinate(txt, &req.x, &req.y, posx, posy + FACEPLATE_CHROME_TOP_ROWS);
+		set_coordinate(txt, &req.x, &req.y, posx + FACEPLATE_CHROME_PAD_COLS,
+			       posy + FACEPLATE_CHROME_TOP_ROWS);
 
 	req.w = glyph->buf.width;
 	req.h = glyph->buf.height;
@@ -473,64 +492,344 @@ static int bbulk_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 	return 0;
 }
 
-static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
+static bool chrome_line_empty(const char *s)
+{
+	if (!s)
+		return true;
+	for (; *s; ++s) {
+		if (*s != ' ' && *s != '\t')
+			return false;
+	}
+	return true;
+}
+
+static int paint_chrome_cell(struct kmscon_text *txt, unsigned int gx, unsigned int gy,
+			     uint8_t br, uint8_t bg, uint8_t bb, uint8_t fr, uint8_t fg,
+			     uint8_t fb, unsigned char ch)
 {
 	struct tsm_screen_cell cell = {0};
 	struct kmscon_glyph *glyph;
 	struct video_blend_req req;
-	const char *rows[6] = {txt->chrome_logo ? "" : txt->chrome_title,
-			       txt->chrome_context,
-			       "",
-			       "",
-			       txt->detail_line,
-			       line};
-	unsigned int logical_rows[6] = {0,
-					2,
-					3,
-					FACEPLATE_CHROME_TOP_ROWS + txt->rows,
-					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 1,
-					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 2};
-	unsigned int i, x;
 
-	for (i = 0; i < 6; ++i) {
-		size_t len = strlen(rows[i]);
-		for (x = 0; x < txt->cols; ++x) {
-			cell.ch = x < len ? (unsigned char)rows[i][x] : ' ';
-			cell.fg.r = i == 0 ? 244 : (i == 1 ? 96 : 180);
-			cell.fg.g = i == 0 ? 248 : (i == 1 ? 205 : 196);
-			cell.fg.b = 255;
-			if (i == 2 || i == 3) {
-				cell.bg.r = 20;
-				cell.bg.g = 126;
-				cell.bg.b = 180;
-			} else {
-				cell.bg.r = 15;
-				cell.bg.g = 23;
-				cell.bg.b = 42;
-			}
-			glyph = find_glyph(txt, &cell);
-			if (!glyph)
-				return -ENOMEM;
-			set_coordinate(txt, &req.x, &req.y, x, logical_rows[i]);
-			req.w = glyph->buf.width;
-			req.h = glyph->buf.height;
-			req.buf = &glyph->buf;
-			set_color(&req, &cell);
-			display_blend(txt->disp, &req);
+	cell.ch = ch;
+	cell.fg.r = fr;
+	cell.fg.g = fg;
+	cell.fg.b = fb;
+	cell.bg.r = br;
+	cell.bg.g = bg;
+	cell.bg.b = bb;
+	glyph = find_glyph(txt, &cell);
+	if (!glyph)
+		return -ENOMEM;
+	set_coordinate(txt, &req.x, &req.y, gx, gy);
+	req.w = glyph->buf.width;
+	req.h = glyph->buf.height;
+	req.buf = &glyph->buf;
+	set_color(&req, &cell);
+	display_blend(txt->disp, &req);
+	return 0;
+}
+
+static int paint_chrome_span(struct kmscon_text *txt, unsigned int y, unsigned int x0,
+			     unsigned int x1, uint8_t br, uint8_t bg, uint8_t bb)
+{
+	unsigned int x;
+	int ret;
+
+	for (x = x0; x < x1; ++x) {
+		ret = paint_chrome_cell(txt, x, y, br, bg, bb, 180, 196, 255, ' ');
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+static int fill_solid_rect(struct display *disp, unsigned int x, unsigned int y, unsigned int w,
+			   unsigned int h, uint8_t r, uint8_t g, uint8_t b)
+{
+	struct video_buffer *buf;
+	struct video_blend_req req;
+	size_t n;
+	unsigned int i;
+
+	if (!w || !h)
+		return 0;
+	n = (size_t)w * (size_t)h;
+	buf = malloc(sizeof(*buf) + n);
+	if (!buf)
+		return -ENOMEM;
+	buf->width = w;
+	buf->height = h;
+	for (i = 0; i < n; ++i)
+		buf->data[i] = 255;
+	req.buf = buf;
+	req.x = x;
+	req.y = y;
+	req.w = w;
+	req.h = h;
+	req.fr = r;
+	req.fg = g;
+	req.fb = b;
+	req.br = r;
+	req.bg = g;
+	req.bb = b;
+	display_blend(disp, &req);
+	free(buf);
+	return 0;
+}
+
+static int stroke_card_border(struct display *disp, unsigned int x, unsigned int y, unsigned int w,
+			      unsigned int h, unsigned int px, uint8_t r, uint8_t g, uint8_t b)
+{
+	int ret;
+
+	if (!w || !h || !px)
+		return 0;
+	/* Top */
+	ret = fill_solid_rect(disp, x, y, w, px, r, g, b);
+	if (ret)
+		return ret;
+	/* Bottom */
+	ret = fill_solid_rect(disp, x, y + h - px, w, px, r, g, b);
+	if (ret)
+		return ret;
+	/* Left */
+	ret = fill_solid_rect(disp, x, y, px, h, r, g, b);
+	if (ret)
+		return ret;
+	/* Right */
+	return fill_solid_rect(disp, x + w - px, y, px, h, r, g, b);
+}
+
+static int paint_chrome_text(struct kmscon_text *txt, unsigned int y, unsigned int x0,
+			     unsigned int max_cols, const char *line, uint8_t br, uint8_t bg,
+			     uint8_t bb, uint8_t fr, uint8_t fg, uint8_t fb)
+{
+	size_t len = line ? strlen(line) : 0;
+	unsigned int x;
+	int ret;
+
+	for (x = 0; x < max_cols && x < len; ++x) {
+		ret = paint_chrome_cell(txt, x0 + x, y, br, bg, bb, fr, fg, fb,
+					(unsigned char)line[x]);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+static int paint_chrome_text_right(struct kmscon_text *txt, unsigned int y, unsigned int x0,
+				   unsigned int max_cols, const char *line, uint8_t br, uint8_t bg,
+				   uint8_t bb, uint8_t fr, uint8_t fg, uint8_t fb)
+{
+	size_t len = line ? strlen(line) : 0;
+	unsigned int start;
+
+	if (!len)
+		return 0;
+	if (len >= max_cols)
+		return paint_chrome_text(txt, y, x0, max_cols, line + (len - max_cols), br, bg, bb,
+					 fr, fg, fb);
+	start = x0 + max_cols - (unsigned int)len;
+	return paint_chrome_text(txt, y, start, max_cols, line, br, bg, bb, fr, fg, fb);
+}
+
+static void connection_fg(struct kmscon_text *txt, uint8_t *fr, uint8_t *fg, uint8_t *fb)
+{
+	if (txt->connection_alert) {
+		*fr = FACEPLATE_ALERT_FG_R;
+		*fg = FACEPLATE_ALERT_FG_G;
+		*fb = FACEPLATE_ALERT_FG_B;
+	} else {
+		*fr = FACEPLATE_ONLINE_FG_R;
+		*fg = FACEPLATE_ONLINE_FG_G;
+		*fb = FACEPLATE_ONLINE_FG_B;
+	}
+}
+
+static void status_fg_for_line(struct kmscon_text *txt, const char *line, uint8_t *fr, uint8_t *fg,
+			      uint8_t *fb)
+{
+	bool alert = false;
+
+	if (txt->connection_alert && line &&
+	    (strstr(line, "Offline") || strstr(line, "Unknown")))
+		alert = true;
+	if (txt->rauc_alert && line && strstr(line, "RAUC"))
+		alert = true;
+	if (alert) {
+		*fr = FACEPLATE_ALERT_FG_R;
+		*fg = FACEPLATE_ALERT_FG_G;
+		*fb = FACEPLATE_ALERT_FG_B;
+	} else {
+		*fr = FACEPLATE_MUTED_FG_R;
+		*fg = FACEPLATE_MUTED_FG_G;
+		*fb = FACEPLATE_MUTED_FG_B;
+	}
+}
+
+static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
+{
+	struct bbulk *bb = txt->data;
+	const char *title = txt->chrome_logo ? "" : txt->chrome_title;
+	unsigned int card_cols = txt->cols + 2 * FACEPLATE_CHROME_PAD_COLS;
+	unsigned int card_y0 = FACEPLATE_CHROME_CARD_Y0;
+	unsigned int term_y0 = FACEPLATE_CHROME_TOP_ROWS;
+	unsigned int term_y1 = FACEPLATE_CHROME_TOP_ROWS + txt->rows;
+	unsigned int pad_bottom_y = term_y1;
+	unsigned int secondary_y = term_y1 + FACEPLATE_CHROME_PAD_ROWS +
+				   FACEPLATE_CHROME_FOOTER_GAP_ROWS;
+	unsigned int y, x;
+	unsigned int card_px, card_py, card_pw, card_ph, logo_y, logo_gap_h;
+	uint8_t fr, fg, fb;
+	size_t len;
+	int ret;
+	struct video_blend_req req;
+	const char *host = txt->identity_hostname;
+	const char *status = txt->identity_status;
+	const char *supporting = txt->identity_supporting;
+	const char *secondary = txt->identity_secondary;
+	const char *compact = txt->identity_compact[0] ? txt->identity_compact : line;
+	unsigned int right_x0 = FACEPLATE_CHROME_PAD_COLS;
+	unsigned int right_cols = txt->cols;
+
+	(void)line;
+
+	/* Keep right-band text clear of the wordmark. */
+	if (txt->chrome_logo && FONT_WIDTH(txt)) {
+		unsigned int logo_cols =
+			(txt->chrome_logo->width + FONT_WIDTH(txt) - 1) / FONT_WIDTH(txt) + 2;
+		if (right_cols > logo_cols + 8) {
+			right_x0 = FACEPLATE_CHROME_PAD_COLS + logo_cols;
+			right_cols -= logo_cols;
 		}
 	}
+
+	/* Page chrome for the brand band + gap (never inside the terminal card). */
+	for (y = 0; y < card_y0; ++y) {
+		ret = paint_chrome_span(txt, y, 0, card_cols, FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+					FACEPLATE_PAGE_B);
+		if (ret)
+			return ret;
+	}
+
+	if (title[0]) {
+		len = strlen(title);
+		for (x = 0; x < card_cols && x < len; ++x) {
+			ret = paint_chrome_cell(txt, x, 0, FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+						FACEPLATE_PAGE_B, 244, 248, 255,
+						(unsigned char)title[x]);
+			if (ret)
+				return ret;
+		}
+	}
+
+	/*
+	 * Right band — operator priority:
+	 *   Online/Offline (lead) → hostname → IP | OS
+	 * Active: single compact rail on the first brand row.
+	 */
+	if (txt->chrome_idle) {
+		connection_fg(txt, &fr, &fg, &fb);
+		ret = paint_chrome_text_right(txt, 0, right_x0, right_cols,
+					      status[0] ? status : "Unknown", FACEPLATE_PAGE_R,
+					      FACEPLATE_PAGE_G, FACEPLATE_PAGE_B, fr, fg, fb);
+		if (ret)
+			return ret;
+		if (FACEPLATE_CHROME_BRAND_ROWS > 1) {
+			ret = paint_chrome_text_right(txt, 1, right_x0, right_cols,
+						      host[0] ? host : "Device", FACEPLATE_PAGE_R,
+						      FACEPLATE_PAGE_G, FACEPLATE_PAGE_B,
+						      FACEPLATE_HOST_FG_R, FACEPLATE_HOST_FG_G,
+						      FACEPLATE_HOST_FG_B);
+			if (ret)
+				return ret;
+		}
+		if (FACEPLATE_CHROME_BRAND_ROWS > 2 && supporting[0]) {
+			ret = paint_chrome_text_right(txt, 2, right_x0, right_cols, supporting,
+						      FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+						      FACEPLATE_PAGE_B, FACEPLATE_MUTED_FG_R,
+						      FACEPLATE_MUTED_FG_G, FACEPLATE_MUTED_FG_B);
+			if (ret)
+				return ret;
+		}
+	} else {
+		status_fg_for_line(txt, compact, &fr, &fg, &fb);
+		if (!txt->connection_alert && !txt->rauc_alert)
+			connection_fg(txt, &fr, &fg, &fb);
+		ret = paint_chrome_text_right(txt, 0, right_x0, right_cols, compact, FACEPLATE_PAGE_R,
+					      FACEPLATE_PAGE_G, FACEPLATE_PAGE_B, fr, fg, fb);
+		if (ret)
+			return ret;
+	}
+
+	/* Black card body: top pad, side pads, bottom pad — terminal cells only. */
+	ret = paint_chrome_span(txt, card_y0, 0, card_cols, FACEPLATE_CARD_R, FACEPLATE_CARD_G,
+				FACEPLATE_CARD_B);
+	if (ret)
+		return ret;
+	for (y = term_y0; y < term_y1; ++y) {
+		ret = paint_chrome_span(txt, y, 0, FACEPLATE_CHROME_PAD_COLS, FACEPLATE_CARD_R,
+					FACEPLATE_CARD_G, FACEPLATE_CARD_B);
+		if (ret)
+			return ret;
+		ret = paint_chrome_span(txt, y, FACEPLATE_CHROME_PAD_COLS + txt->cols, card_cols,
+					FACEPLATE_CARD_R, FACEPLATE_CARD_G, FACEPLATE_CARD_B);
+		if (ret)
+			return ret;
+	}
+	ret = paint_chrome_span(txt, pad_bottom_y, 0, card_cols, FACEPLATE_CARD_R, FACEPLATE_CARD_G,
+				FACEPLATE_CARD_B);
+	if (ret)
+		return ret;
+
+	card_px = bb->off_x;
+	card_py = bb->off_y + card_y0 * FONT_HEIGHT(txt);
+	card_pw = card_cols * FONT_WIDTH(txt);
+	card_ph = (FACEPLATE_CHROME_PAD_ROWS + txt->rows + FACEPLATE_CHROME_PAD_ROWS) *
+		  FONT_HEIGHT(txt);
+	ret = stroke_card_border(txt->disp, card_px, card_py, card_pw, card_ph,
+				 FACEPLATE_CHROME_BORDER_PX, FACEPLATE_CARD_BORDER_R,
+				 FACEPLATE_CARD_BORDER_G, FACEPLATE_CARD_BORDER_B);
+	if (ret)
+		return ret;
+
+	for (y = pad_bottom_y + 1; y <= secondary_y; ++y) {
+		ret = paint_chrome_span(txt, y, 0, card_cols, FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+					FACEPLATE_PAGE_B);
+		if (ret)
+			return ret;
+	}
+	if (secondary[0]) {
+		status_fg_for_line(txt, secondary, &fr, &fg, &fb);
+		if (!txt->rauc_alert) {
+			fr = FACEPLATE_MUTED_FG_R;
+			fg = FACEPLATE_MUTED_FG_G;
+			fb = FACEPLATE_MUTED_FG_B;
+		}
+		ret = paint_chrome_text(txt, secondary_y, FACEPLATE_CHROME_PAD_COLS, txt->cols,
+					secondary, FACEPLATE_PAGE_R, FACEPLATE_PAGE_G,
+					FACEPLATE_PAGE_B, fr, fg, fb);
+		if (ret)
+			return ret;
+	}
+
 	if (txt->chrome_logo && txt->orientation == OR_NORMAL) {
+		logo_gap_h = FACEPLATE_CHROME_BRAND_ROWS * FONT_HEIGHT(txt);
+		logo_y = bb->off_y;
+		if (logo_gap_h > txt->chrome_logo->height)
+			logo_y = bb->off_y + (logo_gap_h - txt->chrome_logo->height) / 2;
 		req.buf = txt->chrome_logo;
-		req.x = ((struct bbulk *)txt->data)->off_x + FONT_WIDTH(txt);
-		req.y = ((struct bbulk *)txt->data)->off_y;
+		req.x = bb->off_x + FONT_WIDTH(txt);
+		req.y = logo_y;
 		req.w = txt->chrome_logo->width;
 		req.h = txt->chrome_logo->height;
 		req.fr = 244;
 		req.fg = 248;
 		req.fb = 255;
-		req.br = 15;
-		req.bg = 23;
-		req.bb = 42;
+		req.br = FACEPLATE_PAGE_R;
+		req.bg = FACEPLATE_PAGE_G;
+		req.bb = FACEPLATE_PAGE_B;
 		display_blend(txt->disp, &req);
 	}
 	return 0;
@@ -602,7 +901,7 @@ static void set_pointer_coordinate(struct bbulk *bb, struct kmscon_text *txt,
 	switch (txt->orientation) {
 	default:
 	case OR_NORMAL:
-		x = pointer_x + bb->off_x;
+		x = pointer_x + bb->off_x + FACEPLATE_CHROME_PAD_COLS * FONT_WIDTH(txt);
 		y = pointer_y + bb->off_y + FACEPLATE_CHROME_TOP_ROWS * FONT_HEIGHT(txt);
 		break;
 	case OR_UPSIDE_DOWN:
@@ -709,7 +1008,8 @@ static void bbulk_compute_damage(struct kmscon_text *txt)
 					prev--;
 				continue;
 			}
-			set_coordinate(txt, &x1, &y1, posx, posy + FACEPLATE_CHROME_TOP_ROWS);
+			set_coordinate(txt, &x1, &y1, posx + FACEPLATE_CHROME_PAD_COLS,
+				       posy + FACEPLATE_CHROME_TOP_ROWS);
 			r.x1 = x1;
 			r.y1 = y1;
 			r.x2 = x1 + fw;
@@ -764,7 +1064,7 @@ static int bbulk_prepare(struct kmscon_text *txt, struct tsm_screen_attr *attr)
 	bb->attr = *attr;
 
 	if (bb->redraw) {
-		display_clear(txt->disp, 8, 12, 20);
+		display_clear(txt->disp, FACEPLATE_PAGE_R, FACEPLATE_PAGE_G, FACEPLATE_PAGE_B);
 		for (i = 0; i < bb->cell_count; i++)
 			damage_cell(bb, i);
 	} else if (display_has_damage(txt->disp)) {

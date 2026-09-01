@@ -9,6 +9,7 @@
 .idea/
 
 build/
+build-docker-aarch64/
 
 *.tar.xz
 *.patch

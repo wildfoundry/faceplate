@@ -73,11 +73,78 @@ struct kmscon_text {
 	char chrome_title[64];
 	char chrome_context[96];
 	struct video_buffer *chrome_logo;
+	/* Idle = login face; active = compact right rail. */
+	bool chrome_idle;
+	char identity_hostname[64];
+	char identity_status[24]; /* Online / Offline / Unknown — lead signal */
+	char identity_supporting[160]; /* labeled facts: IP … | OS … */
+	char identity_secondary[160];
+	char identity_compact[160];
+	bool connection_alert;
+	bool rauc_alert;
 };
 
-#define FACEPLATE_CHROME_TOP_ROWS 4
-#define FACEPLATE_CHROME_BOTTOM_ROWS 3
-#define FACEPLATE_CHROME_HORIZONTAL_CELLS 10
+/*
+ * Layout (OR_NORMAL) — terminal card is terminal-only:
+ *   [ brand band on page: large logo LEFT | Online+host+facts RIGHT ]
+ *   [ small gap ]
+ *   [ black terminal card: pad + pty cells + pad ]
+ *   [ gap ]
+ *   [ quiet footer: Uptime | Serial (+ RAUC if unhealthy) ]
+ *   [ safe margin / overscan ]
+ *
+ * TOP_ROWS = brand + gap + card top pad
+ * BOTTOM_ROWS = card bottom pad + footer gap + secondary
+ */
+#define FACEPLATE_CHROME_BRAND_ROWS 3
+#define FACEPLATE_CHROME_BRAND_GAP_ROWS 1
+#define FACEPLATE_CHROME_PAD_COLS 2
+#define FACEPLATE_CHROME_PAD_ROWS 1
+/* Empty page rows between card bottom and footer. */
+#define FACEPLATE_CHROME_FOOTER_GAP_ROWS 2
+#define FACEPLATE_CHROME_CARD_Y0 \
+	(FACEPLATE_CHROME_BRAND_ROWS + FACEPLATE_CHROME_BRAND_GAP_ROWS)
+#define FACEPLATE_CHROME_TOP_ROWS (FACEPLATE_CHROME_CARD_Y0 + FACEPLATE_CHROME_PAD_ROWS)
+#define FACEPLATE_CHROME_BOTTOM_ROWS \
+	(FACEPLATE_CHROME_PAD_ROWS + FACEPLATE_CHROME_FOOTER_GAP_ROWS + 1)
+/* Page gutters outside the card (total cells subtracted from width). */
+#define FACEPLATE_CHROME_HORIZONTAL_CELLS 14
+/* Thin card outline in pixels — frames, does not glow. */
+#define FACEPLATE_CHROME_BORDER_PX 1
+/* Page / card colours (RGB). */
+#define FACEPLATE_PAGE_R 11
+#define FACEPLATE_PAGE_G 18
+#define FACEPLATE_PAGE_B 32
+#define FACEPLATE_CARD_R 0
+#define FACEPLATE_CARD_G 0
+#define FACEPLATE_CARD_B 0
+/* Quiet slate outline — define the card, not a neon frame. */
+#define FACEPLATE_CARD_BORDER_R 51
+#define FACEPLATE_CARD_BORDER_G 65
+#define FACEPLATE_CARD_BORDER_B 85
+/* Calm / muted page chrome. */
+#define FACEPLATE_STATUS_FG_R 226
+#define FACEPLATE_STATUS_FG_G 232
+#define FACEPLATE_STATUS_FG_B 240
+#define FACEPLATE_MUTED_FG_R 148
+#define FACEPLATE_MUTED_FG_G 163
+#define FACEPLATE_MUTED_FG_B 184
+/* Online (calm but strong) vs Offline/RAUC alert. */
+#define FACEPLATE_ONLINE_FG_R 110
+#define FACEPLATE_ONLINE_FG_G 231
+#define FACEPLATE_ONLINE_FG_B 183
+#define FACEPLATE_ALERT_FG_R 251
+#define FACEPLATE_ALERT_FG_G 146
+#define FACEPLATE_ALERT_FG_B 60
+#define FACEPLATE_HOST_FG_R 248
+#define FACEPLATE_HOST_FG_G 250
+#define FACEPLATE_HOST_FG_B 252
+/* Extra space below footer so TV overscan does not crop status. */
+#define FACEPLATE_CHROME_SAFE_MARGIN_ROWS 8
+
+/* Legacy aliases used by older chrome math comments. */
+#define FACEPLATE_CHROME_LOGO_ROWS FACEPLATE_CHROME_BRAND_ROWS
+#define FACEPLATE_CHROME_IDENTITY_ROWS 0
 
 struct kmscon_cursor {
 	struct tsm_screen_cell cell;
@@ -129,6 +196,11 @@ void kmscon_text_set_status(struct kmscon_text *txt, const char *line);
 void kmscon_text_set_detail(struct kmscon_text *txt, const char *line);
 void kmscon_text_set_identity(struct kmscon_text *txt, const char *title, const char *context,
 			      const char *logo_path);
+void kmscon_text_set_chrome_idle(struct kmscon_text *txt, bool idle);
+void kmscon_text_set_faceplate_status(struct kmscon_text *txt, const char *hostname,
+				      const char *status, const char *supporting,
+				      const char *secondary, const char *compact,
+				      bool connection_alert, bool rauc_alert);
 int kmscon_text_draw_pointer(struct kmscon_text *txt, unsigned int x, unsigned int y);
 int kmscon_text_render(struct kmscon_text *txt);
 void kmscon_text_abort(struct kmscon_text *txt);
