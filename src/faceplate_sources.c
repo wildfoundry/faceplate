@@ -39,9 +39,8 @@ static bool safe_token(const char *s, size_t max)
 		return false;
 	for (i = 0; i < n; ++i) {
 		unsigned char c = (unsigned char)s[i];
-		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-		    (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-' ||
-		    c == ':' || c == '/')
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+		    c == '.' || c == '_' || c == '-' || c == ':' || c == '/')
 			continue;
 		return false;
 	}
@@ -96,8 +95,7 @@ static int parse_manifest(int dirfd, const char *name, struct source *out)
 			strncpy(path, line + 5, sizeof(path) - 1);
 		else if (!strncmp(line, "user=", 5))
 			strncpy(user, line + 5, sizeof(user) - 1);
-		else if (!strncmp(line, "stale_after_ms=", 15) &&
-			 !parse_u64(line + 15, &stale))
+		else if (!strncmp(line, "stale_after_ms=", 15) && !parse_u64(line + 15, &stale))
 			return -EINVAL;
 		else if (*line && *line != '#')
 			return -EINVAL;
@@ -177,8 +175,9 @@ static void refresh_dataplicity(const struct source *source, uint64_t now, char 
 		return;
 	}
 	close(fd);
-	state = snapshot.connection == FACEPLATE_CONNECTION_CONNECTED ? "Online" :
-		snapshot.connection == FACEPLATE_CONNECTION_DISCONNECTED ? "Offline" : "Unknown";
+	state = snapshot.connection == FACEPLATE_CONNECTION_CONNECTED	   ? "Online"
+		: snapshot.connection == FACEPLATE_CONNECTION_DISCONNECTED ? "Offline"
+									   : "Unknown";
 	snprintf(out, cap, "Device %s   Dataplicity %s", snapshot.serial, state);
 }
 
@@ -199,7 +198,8 @@ static void refresh_system(const struct source *source, uint64_t now, char *out,
 	*slash = '\0';
 	fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
 	if (fd < 0 || read_safe_file_at(fd, file, source->uid, buf, sizeof(buf))) {
-		if (fd >= 0) close(fd);
+		if (fd >= 0)
+			close(fd);
 		return;
 	}
 	close(fd);
@@ -208,26 +208,40 @@ static void refresh_system(const struct source *source, uint64_t now, char *out,
 		return;
 	while ((line = strtok_r(NULL, "\n", &save))) {
 		char *value = strchr(line, '=');
-		if (!value) return;
+		if (!value)
+			return;
 		*value++ = '\0';
-		if (!safe_token(value, 63)) return;
-		if (!strcmp(line, "updated_boottime_ms")) { if (!parse_u64(value, &updated)) return; }
-		else if (!strcmp(line, "uptime_seconds")) { if (!parse_u64(value, &uptime)) return; }
-		else if (!strcmp(line, "os_image")) strncpy(os, value, sizeof(os) - 1);
-		else if (!strcmp(line, "primary_ip")) strncpy(ip, value, sizeof(ip) - 1);
-		else if (!strcmp(line, "rauc_slot")) strncpy(slot, value, sizeof(slot) - 1);
-		else if (!strcmp(line, "rauc_image")) strncpy(image, value, sizeof(image) - 1);
-		else if (!strcmp(line, "rauc_boot")) strncpy(boot, value, sizeof(boot) - 1);
-		else if (strcmp(line, "clock_synced")) return;
+		if (!safe_token(value, 63))
+			return;
+		if (!strcmp(line, "updated_boottime_ms")) {
+			if (!parse_u64(value, &updated))
+				return;
+		} else if (!strcmp(line, "uptime_seconds")) {
+			if (!parse_u64(value, &uptime))
+				return;
+		} else if (!strcmp(line, "os_image"))
+			strncpy(os, value, sizeof(os) - 1);
+		else if (!strcmp(line, "primary_ip"))
+			strncpy(ip, value, sizeof(ip) - 1);
+		else if (!strcmp(line, "rauc_slot"))
+			strncpy(slot, value, sizeof(slot) - 1);
+		else if (!strcmp(line, "rauc_image"))
+			strncpy(image, value, sizeof(image) - 1);
+		else if (!strcmp(line, "rauc_boot"))
+			strncpy(boot, value, sizeof(boot) - 1);
+		else if (strcmp(line, "clock_synced"))
+			return;
 	}
 	if (!updated || updated > now || now - updated > source->stale_ms)
 		snprintf(out, cap, "System status Unknown");
 	else {
-		size_t used = (size_t)snprintf(out, cap, "Image %s   Uptime %llus", os[0] ? os : "Unknown",
-					(unsigned long long)uptime);
-		if (ip[0] && used < cap) used += (size_t)snprintf(out + used, cap - used, "   IP %s", ip);
-		if (slot[0] && used < cap) snprintf(out + used, cap - used, "   RAUC %s %s %s", slot,
-			image[0] ? image : "", boot[0] ? boot : "Unknown");
+		size_t used = (size_t)snprintf(out, cap, "Image %s   Uptime %llus",
+					       os[0] ? os : "Unknown", (unsigned long long)uptime);
+		if (ip[0] && used < cap)
+			used += (size_t)snprintf(out + used, cap - used, "   IP %s", ip);
+		if (slot[0] && used < cap)
+			snprintf(out + used, cap - used, "   RAUC %s %s %s", slot,
+				 image[0] ? image : "", boot[0] ? boot : "Unknown");
 	}
 }
 
