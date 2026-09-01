@@ -34,6 +34,9 @@
 #include <errno.h>
 #include <libtsm.h>
 #include <pthread.h>
+#include <png.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
 #include "font/font.h"
@@ -228,6 +231,7 @@ void kmscon_text_unref(struct kmscon_text *text)
 	if (text->ops->destroy)
 		text->ops->destroy(text);
 	shl_register_record_unref(text->record);
+	free(text->chrome_logo);
 	free(text);
 }
 
@@ -442,6 +446,75 @@ void kmscon_text_set_status(struct kmscon_text *txt, const char *line)
 	strncpy(txt->status_line, line, sizeof(txt->status_line) - 1);
 	txt->status_line[sizeof(txt->status_line) - 1] = '\0';
 	txt->status_visible = true;
+}
+
+static struct video_buffer *load_logo(const char *path)
+{
+	png_image image = {0};
+	struct video_buffer *logo = NULL;
+	struct stat st;
+	unsigned char *rgba = NULL;
+	FILE *file = NULL;
+	size_t pixels, i;
+	int fd;
+
+	if (!path || strncmp(path, "/usr/share/faceplate/", 21))
+		return NULL;
+	fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0 || fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_nlink != 1 ||
+	    st.st_uid != 0 || (st.st_mode & 0022) || st.st_size <= 0 || st.st_size > 1024 * 1024) {
+		if (fd >= 0) close(fd);
+		return NULL;
+	}
+	file = fdopen(fd, "rb");
+	if (!file)
+		goto out;
+	image.version = PNG_IMAGE_VERSION;
+	if (!png_image_begin_read_from_stdio(&image, file) || image.width > 512 || image.height > 32)
+		goto out;
+	image.format = PNG_FORMAT_RGBA;
+	rgba = malloc(PNG_IMAGE_SIZE(image));
+	if (!rgba || !png_image_finish_read(&image, NULL, rgba, 0, NULL))
+		goto out;
+	pixels = (size_t)image.width * image.height;
+	logo = malloc(sizeof(*logo) + pixels);
+	if (!logo)
+		goto out;
+	logo->width = image.width;
+	logo->height = image.height;
+	for (i = 0; i < pixels; ++i) {
+		unsigned int luminance = ((unsigned int)rgba[i * 4] + rgba[i * 4 + 1] +
+					  rgba[i * 4 + 2]) / 3;
+		logo->data[i] = (uint8_t)(luminance * rgba[i * 4 + 3] / 255);
+	}
+out:
+	if (file) fclose(file); else if (fd >= 0) close(fd);
+	png_image_free(&image);
+	free(rgba);
+	return logo;
+}
+
+void kmscon_text_set_identity(struct kmscon_text *txt, const char *title, const char *context,
+			      const char *logo_path)
+{
+	if (!txt)
+		return;
+	strncpy(txt->chrome_title, title && *title ? title : "FACEPLATE",
+		sizeof(txt->chrome_title) - 1);
+	txt->chrome_title[sizeof(txt->chrome_title) - 1] = '\0';
+	strncpy(txt->chrome_context, context && *context ? context : "LOCAL DEVICE CONSOLE",
+		sizeof(txt->chrome_context) - 1);
+	txt->chrome_context[sizeof(txt->chrome_context) - 1] = '\0';
+	free(txt->chrome_logo);
+	txt->chrome_logo = load_logo(logo_path);
+}
+
+void kmscon_text_set_detail(struct kmscon_text *txt, const char *line)
+{
+	if (!txt)
+		return;
+	strncpy(txt->detail_line, line ? line : "", sizeof(txt->detail_line) - 1);
+	txt->detail_line[sizeof(txt->detail_line) - 1] = '\0';
 }
 
 static bool is_cursor_blinking(enum tsm_screen_cursor_style style)
