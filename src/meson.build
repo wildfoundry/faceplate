@@ -51,6 +51,7 @@ subdir('uterm')
 kmscon_srcs = [
     'seat.c',
     'config.c',
+    'faceplate_status.c',
     'main.c',
     'terminal.c',
 ]
