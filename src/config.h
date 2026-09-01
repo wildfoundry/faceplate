@@ -185,6 +185,9 @@ struct kmscon_conf_t {
 	unsigned int font_size;
 	/* font name */
 	char *font_name;
+	char *faceplate_title;
+	char *faceplate_context;
+	char *faceplate_logo;
 
 	/* Palette Options */
 	/* color palette */

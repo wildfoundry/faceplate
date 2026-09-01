@@ -43,6 +43,7 @@
 #include "asciinema.h"
 #include "conf.h"
 #include "config.h"
+#include "faceplate_sources.h"
 #include "faceplate_status.h"
 #include "font/font.h"
 #include "input/input.h"
@@ -111,9 +112,7 @@ struct kmscon_terminal {
 	struct ev_timer *status_timer;
 	bool blinking;
 	bool cursor_blinking;
-	int status_dir_fd;
-	uid_t status_uid;
-	bool status_uid_valid;
+	struct faceplate_sources *status_sources;
 	char status_line[160];
 
 	struct kmscon_asciinema *asciinema;
@@ -121,7 +120,6 @@ struct kmscon_terminal {
 
 #define BLINK_TIMER_NS (500 * 1000 * 1000) // Blinking interval 500ms
 #define BLINK_CURSOR_TYPING 1		   // After keypress, wait 1s before blinking the cursor
-#define STATUS_STALE_MS (30ULL * 1000)
 
 static int font_set(struct kmscon_terminal *term);
 static void redraw_all(struct kmscon_terminal *term);
@@ -138,33 +136,21 @@ static uint64_t boottime_ms(void)
 static void status_event(struct ev_timer *timer, uint64_t count, void *data)
 {
 	struct kmscon_terminal *term = data;
-	struct faceplate_status_snapshot snapshot;
-	const char *connection;
+	struct faceplate_display_context context;
+	struct shl_dlist *iter;
+	struct screen *scr;
 
 	(void)timer;
 	(void)count;
-	term->status_line[0] = '\0';
-	if (!term->status_uid_valid)
-		goto redraw;
-	if (term->status_dir_fd < 0)
-		term->status_dir_fd =
-			open("/run/dataplicity", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
-	if (term->status_dir_fd < 0)
-		goto redraw;
-	if (faceplate_status_read_at(term->status_dir_fd, term->status_uid, boottime_ms(),
-				     STATUS_STALE_MS, &snapshot) == FACEPLATE_STATUS_HIDDEN)
-		goto redraw;
+	faceplate_sources_refresh(term->status_sources, boottime_ms(), &context);
+	strncpy(term->status_line, context.device_line, sizeof(term->status_line) - 1);
+	term->status_line[sizeof(term->status_line) - 1] = '\0';
+	shl_dlist_for_each(iter, &term->screens)
+	{
+		scr = shl_dlist_entry(iter, struct screen, list);
+		kmscon_text_set_detail(scr->txt, context.system_line);
+	}
 
-	if (snapshot.connection == FACEPLATE_CONNECTION_CONNECTED)
-		connection = "Online";
-	else if (snapshot.connection == FACEPLATE_CONNECTION_DISCONNECTED)
-		connection = "Offline";
-	else
-		connection = "Unknown";
-	snprintf(term->status_line, sizeof(term->status_line), "Device %s  |  Dataplicity %s",
-		 snapshot.serial, connection);
-
-redraw:
 	redraw_all(term);
 }
 
@@ -793,6 +779,8 @@ int terminal_add_display(struct kmscon_terminal *term, struct display *disp)
 		log_error("cannot create text-renderer");
 		goto err_cb;
 	}
+	kmscon_text_set_identity(scr->txt, term->conf->faceplate_title,
+				 term->conf->faceplate_context, term->conf->faceplate_logo);
 
 	ret = kmscon_text_set(scr->txt, term->font, scr->disp);
 	if (ret) {
@@ -1274,8 +1262,7 @@ void terminal_destroy(struct kmscon_terminal *term)
 	ev_eloop_rm_timer(term->blink_timer);
 	ev_eloop_rm_timer(term->blink_cursor);
 	ev_eloop_rm_timer(term->status_timer);
-	if (term->status_dir_fd >= 0)
-		close(term->status_dir_fd);
+	faceplate_sources_free(term->status_sources);
 	kmscon_asciinema_free(term->asciinema);
 	input_unregister_pointer_cb(term->input, pointer_event, term);
 	input_unregister_key_cb(term->input, input_event, term);
@@ -1348,18 +1335,11 @@ struct kmscon_terminal *terminal_new(struct kmscon_session *session, unsigned in
 	term->session = session;
 	term->eloop = eloop;
 	term->input = input;
-	term->status_dir_fd = -1;
 	shl_dlist_init(&term->screens);
 
 	term->conf_ctx = conf_ctx;
 	term->conf = conf_ctx_get_mem(term->conf_ctx);
-	{
-		struct passwd *pw = getpwnam("dpagent");
-		if (pw) {
-			term->status_uid = pw->pw_uid;
-			term->status_uid_valid = true;
-		}
-	}
+	faceplate_sources_new(&term->status_sources, "/usr/lib/faceplate/sources.d");
 
 	strncpy(term->font_attr.name, term->conf->font_name, KMSCON_FONT_MAX_NAME - 1);
 	term->font_attr.height = term->conf->font_size;

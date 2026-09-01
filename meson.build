@@ -47,6 +47,16 @@ systemdsystemunitdir = systemd_deps.get_variable(
     default_value: 'lib/systemd/system',
 )
 
+install_data(
+    'data/faceplate-system.service',
+    'data/faceplate-system.timer',
+    install_dir: systemdsystemunitdir,
+)
+install_data(
+    'data/sources/system.source',
+    install_dir: get_option('prefix') / 'lib/faceplate/sources.d',
+)
+
 #
 # Required dependencies
 #
@@ -57,6 +67,7 @@ dl_deps = dependency('dl')
 threads_deps = dependency('threads')
 zlib_deps = dependency('zlib')
 zlib_deps_native = dependency('zlib', native: true)
+libpng_deps = dependency('libpng')
 
 python = find_program('python3')
 

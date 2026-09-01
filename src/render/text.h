@@ -69,7 +69,15 @@ struct kmscon_text {
 	bool blinking;
 	char status_line[160];
 	bool status_visible;
+	char detail_line[192];
+	char chrome_title[64];
+	char chrome_context[96];
+	struct video_buffer *chrome_logo;
 };
+
+#define FACEPLATE_CHROME_TOP_ROWS 4
+#define FACEPLATE_CHROME_BOTTOM_ROWS 3
+#define FACEPLATE_CHROME_HORIZONTAL_CELLS 10
 
 struct kmscon_cursor {
 	struct tsm_screen_cell cell;
@@ -118,6 +126,9 @@ int kmscon_text_rotate(struct kmscon_text *txt, enum Orientation orientation);
 int kmscon_text_prepare(struct kmscon_text *txt, struct tsm_screen_attr *attr, bool blinking);
 int kmscon_text_draw(struct kmscon_text *txt, struct tsm_screen *con, bool cursor_blink);
 void kmscon_text_set_status(struct kmscon_text *txt, const char *line);
+void kmscon_text_set_detail(struct kmscon_text *txt, const char *line);
+void kmscon_text_set_identity(struct kmscon_text *txt, const char *title, const char *context,
+			      const char *logo_path);
 int kmscon_text_draw_pointer(struct kmscon_text *txt, unsigned int x, unsigned int y);
 int kmscon_text_render(struct kmscon_text *txt);
 void kmscon_text_abort(struct kmscon_text *txt);

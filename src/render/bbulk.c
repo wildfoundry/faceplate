@@ -116,16 +116,22 @@ static void compute_border(struct kmscon_text *txt)
 
 	if (txt->orientation == OR_NORMAL || txt->orientation == OR_UPSIDE_DOWN) {
 		bb->off_x = (bb->sw - txt->cols * FONT_WIDTH(txt)) / 2;
-		bb->off_y = (bb->sh - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
+		bb->off_y = (bb->sh - (txt->rows + FACEPLATE_CHROME_TOP_ROWS +
+				       FACEPLATE_CHROME_BOTTOM_ROWS) *
+					      FONT_HEIGHT(txt)) /
+			    2;
 		bb->max_x = bb->off_x + txt->cols * FONT_WIDTH(txt);
-		bb->max_y = bb->off_y + txt->rows * FONT_HEIGHT(txt);
+		bb->max_y = bb->off_y +
+			    (txt->rows + FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS) *
+				    FONT_HEIGHT(txt);
 	} else {
 		bb->off_x = (bb->sw - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
 		bb->off_y = (bb->sh - txt->cols * FONT_WIDTH(txt)) / 2;
 		bb->max_x = bb->off_x + txt->rows * FONT_HEIGHT(txt);
 		bb->max_y = bb->off_y + txt->cols * FONT_WIDTH(txt);
 	}
-	display_set_cursor_offset(txt->disp, bb->off_x, bb->off_y);
+	display_set_cursor_offset(txt->disp, bb->off_x,
+				  bb->off_y + FACEPLATE_CHROME_TOP_ROWS * FONT_HEIGHT(txt));
 }
 
 static int bbulk_set(struct kmscon_text *txt)
@@ -149,17 +155,17 @@ static int bbulk_set(struct kmscon_text *txt)
 		txt->max_rows = bb->sw / FONT_HEIGHT(txt);
 		txt->max_cols = bb->sh / FONT_WIDTH(txt);
 	}
-	if (txt->max_cols > 4)
-		txt->max_cols -= 4;
-	if (txt->max_rows > 4)
-		txt->max_rows -= 4;
+	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS)
+		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS;
+	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2)
+		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2;
 	txt->cols = txt->max_cols;
 	txt->rows = txt->max_rows;
 	compute_border(txt);
 
 	bb->cell_count = txt->max_cols * (txt->max_rows + 2);
 	max_damage_rects =
-		SHL_DIV_ROUND_UP(txt->max_cols, DAMAGE_MERGE_LEN + 1) * (txt->max_rows + 2);
+		SHL_DIV_ROUND_UP(txt->max_cols, DAMAGE_MERGE_LEN + 1) * (txt->max_rows + 2) + 2;
 
 	bb->cells = malloc(sizeof(*bb->cells) * bb->cell_count);
 	if (!bb->cells)
@@ -422,9 +428,9 @@ static int bbulk_draw_cell(struct kmscon_text *txt, const struct tsm_screen_cell
 		 * next cell, as the glyph is already rotated, so start on the next cell
 		 * and end on this cell
 		 */
-		set_coordinate(txt, &req.x, &req.y, posx + 1, posy);
+		set_coordinate(txt, &req.x, &req.y, posx + 1, posy + FACEPLATE_CHROME_TOP_ROWS);
 	else
-		set_coordinate(txt, &req.x, &req.y, posx, posy);
+		set_coordinate(txt, &req.x, &req.y, posx, posy + FACEPLATE_CHROME_TOP_ROWS);
 
 	req.w = glyph->buf.width;
 	req.h = glyph->buf.height;
@@ -470,18 +476,62 @@ static int bbulk_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 static int bbulk_draw_status(struct kmscon_text *txt, const char *line)
 {
 	struct tsm_screen_cell cell = {0};
-	unsigned int x;
-	size_t len = strlen(line);
+	struct kmscon_glyph *glyph;
+	struct video_blend_req req;
+	const char *rows[6] = {txt->chrome_logo ? "" : txt->chrome_title,
+			       txt->chrome_context,
+			       "",
+			       "",
+			       txt->detail_line,
+			       line};
+	unsigned int logical_rows[6] = {0,
+					2,
+					3,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 1,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 2};
+	unsigned int i, x;
 
-	cell.fg.r = 180;
-	cell.fg.g = 196;
-	cell.fg.b = 220;
-	cell.bg.r = 8;
-	cell.bg.g = 12;
-	cell.bg.b = 20;
-	for (x = 0; x < txt->cols; ++x) {
-		cell.ch = x < len ? (unsigned char)line[x] : ' ';
-		bbulk_draw_cell(txt, &cell, x, txt->rows + 1);
+	for (i = 0; i < 6; ++i) {
+		size_t len = strlen(rows[i]);
+		for (x = 0; x < txt->cols; ++x) {
+			cell.ch = x < len ? (unsigned char)rows[i][x] : ' ';
+			cell.fg.r = i == 0 ? 244 : (i == 1 ? 96 : 180);
+			cell.fg.g = i == 0 ? 248 : (i == 1 ? 205 : 196);
+			cell.fg.b = 255;
+			if (i == 2 || i == 3) {
+				cell.bg.r = 20;
+				cell.bg.g = 126;
+				cell.bg.b = 180;
+			} else {
+				cell.bg.r = 15;
+				cell.bg.g = 23;
+				cell.bg.b = 42;
+			}
+			glyph = find_glyph(txt, &cell);
+			if (!glyph)
+				return -ENOMEM;
+			set_coordinate(txt, &req.x, &req.y, x, logical_rows[i]);
+			req.w = glyph->buf.width;
+			req.h = glyph->buf.height;
+			req.buf = &glyph->buf;
+			set_color(&req, &cell);
+			display_blend(txt->disp, &req);
+		}
+	}
+	if (txt->chrome_logo && txt->orientation == OR_NORMAL) {
+		req.buf = txt->chrome_logo;
+		req.x = ((struct bbulk *)txt->data)->off_x + FONT_WIDTH(txt);
+		req.y = ((struct bbulk *)txt->data)->off_y;
+		req.w = txt->chrome_logo->width;
+		req.h = txt->chrome_logo->height;
+		req.fr = 244;
+		req.fg = 248;
+		req.fb = 255;
+		req.br = 15;
+		req.bg = 23;
+		req.bb = 42;
+		display_blend(txt->disp, &req);
 	}
 	return 0;
 }
@@ -553,7 +603,7 @@ static void set_pointer_coordinate(struct bbulk *bb, struct kmscon_text *txt,
 	default:
 	case OR_NORMAL:
 		x = pointer_x + bb->off_x;
-		y = pointer_y + bb->off_y;
+		y = pointer_y + bb->off_y + FACEPLATE_CHROME_TOP_ROWS * FONT_HEIGHT(txt);
 		break;
 	case OR_UPSIDE_DOWN:
 		x = bb->max_x - pointer_x;
@@ -561,7 +611,7 @@ static void set_pointer_coordinate(struct bbulk *bb, struct kmscon_text *txt,
 		break;
 	case OR_RIGHT:
 		x = bb->max_x - pointer_y;
-		y = pointer_x + bb->off_y;
+		y = pointer_x + bb->off_y + FACEPLATE_CHROME_TOP_ROWS * FONT_HEIGHT(txt);
 		break;
 	case OR_LEFT:
 		x = pointer_y + bb->off_x;
@@ -659,7 +709,7 @@ static void bbulk_compute_damage(struct kmscon_text *txt)
 					prev--;
 				continue;
 			}
-			set_coordinate(txt, &x1, &y1, posx, posy);
+			set_coordinate(txt, &x1, &y1, posx, posy + FACEPLATE_CHROME_TOP_ROWS);
 			r.x1 = x1;
 			r.y1 = y1;
 			r.x2 = x1 + fw;
@@ -671,6 +721,17 @@ static void bbulk_compute_damage(struct kmscon_text *txt)
 			prev = DAMAGE_MERGE_LEN;
 		}
 	}
+
+	/* Chrome is redrawn every frame and sits outside the terminal cell grid. */
+	r.x1 = 0;
+	r.y1 = 0;
+	r.x2 = bb->sw;
+	r.y2 = bb->off_y + FACEPLATE_CHROME_TOP_ROWS * fh;
+	add_damage(bb, &r);
+
+	r.y1 = bb->off_y + (FACEPLATE_CHROME_TOP_ROWS + txt->rows) * fh;
+	r.y2 = bb->sh;
+	add_damage(bb, &r);
 }
 static int bbulk_render(struct kmscon_text *txt)
 {

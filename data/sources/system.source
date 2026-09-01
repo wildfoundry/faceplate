@@ -1,0 +1,6 @@
+# Root-owned source registration; publisher data remains in RAM.
+kind=system
+path=/run/faceplate-system/status
+user=faceplate-status
+stale_after_ms=15000
+

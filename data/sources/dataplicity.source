@@ -1,0 +1,6 @@
+# Optional external publisher. Missing is normal and remains visually hidden.
+kind=dataplicity
+path=/run/dataplicity/faceplate.status
+user=dpagent
+stale_after_ms=30000
+

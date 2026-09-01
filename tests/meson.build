@@ -36,7 +36,7 @@ test(
 test_text = executable(
     'test_text',
     'test_text.c',
-    dependencies: [libtsm_deps, shl_deps],
+    dependencies: [libtsm_deps, shl_deps, libpng_deps],
 )
 test('test_text', test_text)
 

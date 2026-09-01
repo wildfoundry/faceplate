@@ -161,7 +161,10 @@ static void compute_advance_and_offset(struct kmscon_text *txt)
 		gt->advance_x = 2.0 / gt->sw * FONT_WIDTH(txt);
 		gt->advance_y = 2.0 / gt->sh * FONT_HEIGHT(txt);
 		off_x = (gt->sw - txt->cols * FONT_WIDTH(txt)) / 2;
-		off_y = (gt->sh - (txt->rows + 2) * FONT_HEIGHT(txt)) / 2;
+		off_y = (gt->sh -
+			 (txt->rows + FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS) *
+				 FONT_HEIGHT(txt)) /
+			2;
 		gt->off_x = (float)2.0 * off_x / gt->sw;
 		gt->off_y = (float)2.0 * off_y / gt->sh;
 	} else {
@@ -172,7 +175,8 @@ static void compute_advance_and_offset(struct kmscon_text *txt)
 		gt->off_x = (float)2.0 * off_y / gt->sh;
 		gt->off_y = (float)2.0 * off_x / gt->sw;
 	}
-	display_set_cursor_offset(txt->disp, off_x, off_y);
+	display_set_cursor_offset(txt->disp, off_x,
+				  off_y + FACEPLATE_CHROME_TOP_ROWS * FONT_HEIGHT(txt));
 }
 
 static int gltex_set(struct kmscon_text *txt)
@@ -229,10 +233,10 @@ static int gltex_set(struct kmscon_text *txt)
 		txt->max_cols = gt->sh / FONT_WIDTH(txt);
 		txt->max_rows = gt->sw / FONT_HEIGHT(txt);
 	}
-	if (txt->max_cols > 4)
-		txt->max_cols -= 4;
-	if (txt->max_rows > 4)
-		txt->max_rows -= 4;
+	if (txt->max_cols > FACEPLATE_CHROME_HORIZONTAL_CELLS)
+		txt->max_cols -= FACEPLATE_CHROME_HORIZONTAL_CELLS;
+	if (txt->max_rows > FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2)
+		txt->max_rows -= FACEPLATE_CHROME_TOP_ROWS + FACEPLATE_CHROME_BOTTOM_ROWS + 2;
 	txt->cols = txt->max_cols;
 	txt->rows = txt->max_rows;
 	compute_advance_and_offset(txt);
@@ -520,8 +524,8 @@ static int gltex_prepare(struct kmscon_text *txt, struct tsm_screen_attr *attr)
 	return 0;
 }
 
-static int gltex_draw_cell(struct kmscon_text *txt, const struct tsm_screen_cell *cell,
-			   unsigned int posx, unsigned int posy)
+static int gltex_draw_cell_at(struct kmscon_text *txt, const struct tsm_screen_cell *cell,
+			      unsigned int posx, unsigned int posy)
 {
 	struct gltex *gt = txt->data;
 	struct atlas *atlas;
@@ -595,6 +599,12 @@ static int gltex_draw_cell(struct kmscon_text *txt, const struct tsm_screen_cell
 	return 0;
 }
 
+static int gltex_draw_cell(struct kmscon_text *txt, const struct tsm_screen_cell *cell,
+			   unsigned int posx, unsigned int posy)
+{
+	return gltex_draw_cell_at(txt, cell, posx, posy + FACEPLATE_CHROME_TOP_ROWS);
+}
+
 static int gltex_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cells,
 		      struct kmscon_cursor *cursor)
 {
@@ -621,18 +631,34 @@ static int gltex_draw(struct kmscon_text *txt, const struct tsm_screen_cell *cel
 static int gltex_draw_status(struct kmscon_text *txt, const char *line)
 {
 	struct tsm_screen_cell cell = {0};
-	unsigned int x;
-	size_t len = strlen(line);
+	const char *rows[6] = {
+		txt->chrome_title, txt->chrome_context, "", "", txt->detail_line, line};
+	unsigned int logical_rows[6] = {0,
+					2,
+					3,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 1,
+					FACEPLATE_CHROME_TOP_ROWS + txt->rows + 2};
+	unsigned int i, x;
 
-	cell.fg.r = 180;
-	cell.fg.g = 196;
-	cell.fg.b = 220;
-	cell.bg.r = 8;
-	cell.bg.g = 12;
-	cell.bg.b = 20;
-	for (x = 0; x < txt->cols; ++x) {
-		cell.ch = x < len ? (unsigned char)line[x] : ' ';
-		gltex_draw_cell(txt, &cell, x, txt->rows + 1);
+	for (i = 0; i < 6; ++i) {
+		size_t len = strlen(rows[i]);
+		for (x = 0; x < txt->cols; ++x) {
+			cell.ch = x < len ? (unsigned char)rows[i][x] : ' ';
+			cell.fg.r = i == 0 ? 244 : (i == 1 ? 96 : 180);
+			cell.fg.g = i == 0 ? 248 : (i == 1 ? 205 : 196);
+			cell.fg.b = 255;
+			if (i == 2 || i == 3) {
+				cell.bg.r = 20;
+				cell.bg.g = 126;
+				cell.bg.b = 180;
+			} else {
+				cell.bg.r = 15;
+				cell.bg.g = 23;
+				cell.bg.b = 42;
+			}
+			gltex_draw_cell_at(txt, &cell, x, logical_rows[i]);
+		}
 	}
 	return 0;
 }
@@ -672,7 +698,8 @@ static int gltex_draw_pointer(struct kmscon_text *txt, unsigned int x, unsigned 
 		y = sh;
 
 	gl_x1 = gt->off_x + x * 2.0 / sw - 1.0 - gt->advance_x / 2.0;
-	gl_y1 = 1.0 - gt->off_y - y * 2.0 / sh + gt->advance_y / 2.0;
+	gl_y1 = 1.0 - gt->off_y - FACEPLATE_CHROME_TOP_ROWS * gt->advance_y - y * 2.0 / sh +
+		gt->advance_y / 2.0;
 	gl_x2 = gl_x1 + gt->advance_x;
 	gl_y2 = gl_y1 - gt->advance_y;
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Faceplate local status
+
+[Timer]
+OnBootSec=1s
+OnUnitActiveSec=5s
+AccuracySec=1s
+Unit=faceplate-system.service
+
+[Install]
+WantedBy=timers.target
+

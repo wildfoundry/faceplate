@@ -801,6 +801,10 @@ int kmscon_conf_new(struct conf_ctx **out)
 		CONF_OPTION_STRING(0, "font-engine", &conf->font_engine, NULL),
 		CONF_OPTION_UINT(0, "font-size", &conf->font_size, 16),
 		CONF_OPTION_STRING(0, "font-name", &conf->font_name, "monospace"),
+		CONF_OPTION_STRING(0, "faceplate-title", &conf->faceplate_title, "Faceplate"),
+		CONF_OPTION_STRING(0, "faceplate-context", &conf->faceplate_context,
+				   "LOCAL DEVICE CONSOLE"),
+		CONF_OPTION_STRING(0, "faceplate-logo", &conf->faceplate_logo, NULL),
 
 		/* Palette Options */
 		CONF_OPTION_STRING(0, "palette", &conf->palette, NULL),
