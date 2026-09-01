@@ -32,13 +32,13 @@
  */
 
 #include <errno.h>
-#include <libtsm.h>
-#include <pthread.h>
-#include <png.h>
 #include <fcntl.h>
-#include <sys/stat.h>
+#include <libtsm.h>
+#include <png.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "font/font.h"
 #include "shl/log.h"
 #include "shl/misc.h"
@@ -463,14 +463,16 @@ static struct video_buffer *load_logo(const char *path)
 	fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
 	if (fd < 0 || fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_nlink != 1 ||
 	    st.st_uid != 0 || (st.st_mode & 0022) || st.st_size <= 0 || st.st_size > 1024 * 1024) {
-		if (fd >= 0) close(fd);
+		if (fd >= 0)
+			close(fd);
 		return NULL;
 	}
 	file = fdopen(fd, "rb");
 	if (!file)
 		goto out;
 	image.version = PNG_IMAGE_VERSION;
-	if (!png_image_begin_read_from_stdio(&image, file) || image.width > 512 || image.height > 32)
+	if (!png_image_begin_read_from_stdio(&image, file) || image.width > 512 ||
+	    image.height > 32)
 		goto out;
 	image.format = PNG_FORMAT_RGBA;
 	rgba = malloc(PNG_IMAGE_SIZE(image));
@@ -483,12 +485,15 @@ static struct video_buffer *load_logo(const char *path)
 	logo->width = image.width;
 	logo->height = image.height;
 	for (i = 0; i < pixels; ++i) {
-		unsigned int luminance = ((unsigned int)rgba[i * 4] + rgba[i * 4 + 1] +
-					  rgba[i * 4 + 2]) / 3;
+		unsigned int luminance =
+			((unsigned int)rgba[i * 4] + rgba[i * 4 + 1] + rgba[i * 4 + 2]) / 3;
 		logo->data[i] = (uint8_t)(luminance * rgba[i * 4 + 3] / 255);
 	}
 out:
-	if (file) fclose(file); else if (fd >= 0) close(fd);
+	if (file)
+		fclose(file);
+	else if (fd >= 0)
+		close(fd);
 	png_image_free(&image);
 	free(rgba);
 	return logo;
