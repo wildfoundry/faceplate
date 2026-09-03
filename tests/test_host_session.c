@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <pty.h>
@@ -78,7 +79,7 @@ START_TEST(test_helper_runs_true_on_pty)
 	char sock[128];
 	int lfd, master, slave, status;
 	pid_t server, client;
-	char *argv[] = { "/bin/false", NULL };
+	char *argv[] = {"/bin/false", NULL};
 
 	ck_assert_ptr_nonnull(mkdtemp(dir));
 	snprintf(sock, sizeof(sock), "%s/host-login.sock", dir);
@@ -147,7 +148,7 @@ START_TEST(test_helper_rejects_non_pty)
 	client = fork();
 	ck_assert_int_ge(client, 0);
 	if (client == 0) {
-		char *argv[] = { "/bin/true", NULL };
+		char *argv[] = {"/bin/true", NULL};
 
 		close(lfd);
 		close(sp[1]);
@@ -180,7 +181,7 @@ START_TEST(test_helper_requires_faceplate_cgroup)
 	char sock[128];
 	int lfd, master, slave, status;
 	pid_t server, client;
-	char *argv[] = { "/bin/true", NULL };
+	char *argv[] = {"/bin/true", NULL};
 
 	ck_assert_ptr_nonnull(mkdtemp(dir));
 	snprintf(sock, sizeof(sock), "%s/host-login.sock", dir);
@@ -223,7 +224,7 @@ END_TEST
 
 START_TEST(test_disabled_helper_returns_notsup)
 {
-	char *argv[] = { "/bin/true", NULL };
+	char *argv[] = {"/bin/true", NULL};
 
 	setenv("FACEPLATE_HOST_LOGIN", "0", 1);
 	ck_assert_int_eq(faceplate_host_session_exec(argv), -ENOTSUP);
@@ -234,8 +235,7 @@ END_TEST
 START_TEST(test_default_socket_path)
 {
 	unsetenv("FACEPLATE_HOST_LOGIN_SOCKET");
-	ck_assert_str_eq(faceplate_host_session_socket_path(),
-			 FACEPLATE_HOST_LOGIN_SOCKET_DEFAULT);
+	ck_assert_str_eq(faceplate_host_session_socket_path(), FACEPLATE_HOST_LOGIN_SOCKET_DEFAULT);
 	setenv("FACEPLATE_HOST_LOGIN_SOCKET", "/tmp/x.sock", 1);
 	ck_assert_str_eq(faceplate_host_session_socket_path(), "/tmp/x.sock");
 	unsetenv("FACEPLATE_HOST_LOGIN_SOCKET");

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-
+#endif
 #include "host_session.h"
 
 #include <errno.h>
@@ -92,7 +93,10 @@ const char *faceplate_host_session_socket_path(void)
 
 static int send_fd(int sock, int fd, const void *buf, size_t len)
 {
-	struct iovec iov = { .iov_base = (void *)buf, .iov_len = len };
+	struct iovec iov = {
+		.iov_base = (void *)buf,
+		.iov_len = len,
+	};
 	union {
 		struct cmsghdr align;
 		char buf[CMSG_SPACE(sizeof(int))];
@@ -119,7 +123,10 @@ static int send_fd(int sock, int fd, const void *buf, size_t len)
 
 static int recv_fd(int sock, int *fd_out, void *buf, size_t len)
 {
-	struct iovec iov = { .iov_base = buf, .iov_len = len };
+	struct iovec iov = {
+		.iov_base = buf,
+		.iov_len = len,
+	};
 	union {
 		struct cmsghdr align;
 		char buf[CMSG_SPACE(sizeof(int))];
@@ -292,8 +299,7 @@ int faceplate_host_session_exec(char **argv)
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
-	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s",
-		 faceplate_host_session_socket_path());
+	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", faceplate_host_session_socket_path());
 	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		ret = -errno;
 		goto out;
@@ -413,8 +419,8 @@ static int sanitized_term(char **env, char *out, size_t out_len)
 		v = "vt220";
 	for (i = 0; v[i]; ++i) {
 		char c = v[i];
-		if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-		      (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_')) {
+		if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+		      c == '.' || c == '-' || c == '_')) {
 			v = "vt220";
 			break;
 		}
@@ -488,14 +494,17 @@ int faceplate_host_session_serve_one(int conn)
 	if (waitpid(pid, &status, 0) < 0)
 		status = 255;
 	st = (uint32_t)status;
-	(void)write(conn, &st, sizeof(st));
+	if (write(conn, &st, sizeof(st)) != (ssize_t)sizeof(st))
+		status = 255;
 	free(argv);
 	free(env);
 	return 0;
 
 fail:
 	st = 255;
-	(void)write(conn, &st, sizeof(st));
+	if (write(conn, &st, sizeof(st)) != (ssize_t)sizeof(st)) {
+		/* peer already gone */
+	}
 	if (pty >= 0)
 		close(pty);
 	free(argv);
