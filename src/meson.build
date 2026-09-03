@@ -85,3 +85,12 @@ executable(
     install: true,
     install_dir: bindir,
 )
+
+executable(
+    'faceplate-host-login',
+    'faceplate_host_login.c',
+    include_directories: misc_inc,
+    dependencies: [misc_deps],
+    install: true,
+    install_dir: bindir,
+)

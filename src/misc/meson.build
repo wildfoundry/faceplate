@@ -3,6 +3,7 @@
 misc_srcs = [
     'asciinema.c',
     'conf.c',
+    'host_session.c',
     'issue.c',
     'issue_network.c',
     'pty.c',

@@ -18,6 +18,9 @@ Faceplate preserves kmscon's Git history, copyright notices, and licences. See
 [UPSTREAM.md](UPSTREAM.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md),
 and [COPYING](COPYING).
 
+The HDMI login session is **not** the sandboxed compositor. See
+[docs/CONSOLE.md](docs/CONSOLE.md).
+
 ## Current baseline
 
 - Upstream repository: `https://github.com/kmscon/kmscon.git`

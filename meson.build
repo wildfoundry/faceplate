@@ -50,6 +50,8 @@ systemdsystemunitdir = systemd_deps.get_variable(
 install_data(
     'data/faceplate-system.service',
     'data/faceplate-system.timer',
+    'data/faceplate-host-login.service',
+    'data/faceplate-host-login.socket',
     install_dir: systemdsystemunitdir,
 )
 install_data(

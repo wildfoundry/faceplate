@@ -37,6 +37,7 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include "host_session.h"
 #include "pty.h"
 #include "shl/eloop.h"
 #include "shl/log.h"
@@ -248,6 +249,17 @@ static void __attribute__((noreturn)) exec_child(const char *term, const char *c
 	ret = shl_replace_array_with_env(&argv_parsed, argv);
 	if (ret)
 		argv_parsed = argv;
+
+	/*
+	 * Prefer an unsandboxed helper so login does not inherit ProtectSystem
+	 * or RestrictAddressFamilies seccomp from faceplate.service.
+	 */
+	ret = faceplate_host_session_exec(argv_parsed);
+	if (ret && ret != -ENOTSUP)
+		log_warn("host-login helper unavailable (%d); exec in compositor namespaces",
+			 -ret);
+
+	(void)faceplate_host_session_enter_init_namespaces();
 
 	execve(argv_parsed[0], argv_parsed, environ);
 

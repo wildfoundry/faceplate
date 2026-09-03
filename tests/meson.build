@@ -90,3 +90,19 @@ test(
     protocol: 'tap',
     env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
 )
+
+cc = meson.get_compiler('c')
+util_dep = cc.find_library('util', required: false)
+
+test_host_session = executable(
+    'test_host_session',
+    'test_host_session.c',
+    include_directories: [src_inc, misc_inc],
+    dependencies: [check_deps, misc_deps, util_dep],
+)
+test(
+    'faceplate_host_session',
+    test_host_session,
+    protocol: 'tap',
+    env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
+)
