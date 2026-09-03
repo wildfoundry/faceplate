@@ -438,9 +438,14 @@ static void run_login(int pty, char **env)
 
 	if (setsid() < 0 && errno != EPERM)
 		_exit(127);
-	if (ioctl(pty, TIOCSCTTY, 0) < 0 && errno != EPERM) {
-		/* already controlling */
-	}
+	/*
+	 * Force-steal the controlling TTY. The sandboxed Faceplate PTY child
+	 * opens this slave before SCM_RIGHTS handoff and may still be the
+	 * session that owns it. TIOCSCTTY(0) then fails silently and /bin/login
+	 * + bash print "cannot set terminal process group" / "no job control".
+	 */
+	if (ioctl(pty, TIOCSCTTY, 1) < 0)
+		_exit(127);
 	if (dup2(pty, STDIN_FILENO) < 0 || dup2(pty, STDOUT_FILENO) < 0 ||
 	    dup2(pty, STDERR_FILENO) < 0)
 		_exit(127);

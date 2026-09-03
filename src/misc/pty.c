@@ -269,7 +269,6 @@ static void setup_child(int master, bool backspace_delete, struct winsize *ws)
 {
 	int ret;
 	sigset_t sigset;
-	pid_t pid;
 	char slave_name[128];
 	int slave = -1, i;
 	struct termios attr;
@@ -301,14 +300,12 @@ static void setup_child(int master, bool backspace_delete, struct winsize *ws)
 		goto err_out;
 	}
 
-	/* This also loses our controlling tty. */
-	pid = setsid();
-	if (pid < 0) {
-		log_err("cannot start a new session: %m");
-		goto err_out;
-	}
-
-	/* And the slave pty becomes our controlling tty. */
+	/*
+	 * Do not setsid()/claim this slave as our controlling TTY. Login runs
+	 * in faceplate-host-login after SCM_RIGHTS handoff; that helper must be
+	 * free to setsid + TIOCSCTTY. Claiming CTTY here made TIOCSCTTY(0) fail
+	 * in the helper and left HDMI shells without job control.
+	 */
 	slave = open(slave_name, O_RDWR | O_CLOEXEC);
 	if (slave < 0) {
 		log_err("cannot open slave: %m");
