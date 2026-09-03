@@ -5,7 +5,9 @@ PartOf=faceplate.service
 
 [Socket]
 ListenStream=/run/faceplate/host-login.sock
-DirectoryMode=0755
+SocketUser=root
+SocketGroup=root
+DirectoryMode=0750
 SocketMode=0600
 RemoveOnStop=yes
 

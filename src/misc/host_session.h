@@ -9,7 +9,11 @@
  * RestrictAddressFamilies). Login shells must not inherit that. The PTY child
  * keeps stdin/stdout/stderr on the slave, then hands the fd to an unsandboxed
  * helper over AF_UNIX + SCM_RIGHTS. systemd seccomp is per-process-tree and
- * cannot be dropped after fork, so the helper must already be a different unit.
+ * Helper policy (production):
+ * - SO_PEERCRED uid must match the helper euid (root)
+ * - peer cgroup must contain faceplate.service
+ * - fd must be a Unix98 PTY slave
+ * - exec is always /bin/login -p; payload argv/environ are not executed
  */
 
 #define FACEPLATE_HOST_LOGIN_SOCKET_DEFAULT "/run/faceplate/host-login.sock"

@@ -251,17 +251,14 @@ static void __attribute__((noreturn)) exec_child(const char *term, const char *c
 		argv_parsed = argv;
 
 	/*
-	 * Prefer an unsandboxed helper so login does not inherit ProtectSystem
-	 * or RestrictAddressFamilies seccomp from faceplate.service.
+	 * Login must not inherit this process's ProtectSystem/seccomp.
+	 * Do not setns+exec here: joining pid 1's mount namespace from the
+	 * compositor would writeable-escape the sandbox without dropping
+	 * seccomp. Fail closed if the helper is missing.
 	 */
 	ret = faceplate_host_session_exec(argv_parsed);
 	if (ret && ret != -ENOTSUP)
-		log_warn("host-login helper unavailable (%d); exec in compositor namespaces",
-			 -ret);
-
-	(void)faceplate_host_session_enter_init_namespaces();
-
-	execve(argv_parsed[0], argv_parsed, environ);
+		log_err("host-login helper unavailable (%d)", -ret);
 
 	log_err("failed to exec child %s: %m", argv[0]);
 

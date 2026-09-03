@@ -8,8 +8,27 @@ After=faceplate-host-login.socket
 Type=simple
 ExecStart=/usr/bin/faceplate-host-login
 Restart=on-failure
-# Unsandboxed on purpose: login sessions must not inherit Faceplate's
-# ProtectSystem=strict or RestrictAddressFamilies seccomp filter.
+# Login children need AF_INET; do not RestrictAddressFamilies on this unit.
+# The compositor sandbox is the containment; this unit is a getty equivalent.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+# MDWE breaks some PAM stacks used by /bin/login.
+SystemCallArchitectures=native
+UMask=0077
+KeyringMode=private
+LimitNOFILE=64
+ReadWritePaths=-/run -/var/log -/dev/pts
+# /bin/login must read /etc/shadow and write utmp/wtmp.
 
 [Install]
 Also=faceplate-host-login.socket

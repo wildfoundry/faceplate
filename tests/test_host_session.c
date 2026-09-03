@@ -49,6 +49,8 @@ START_TEST(test_helper_runs_true_on_pty)
 
 		if (conn < 0)
 			_exit(2);
+		setenv("FACEPLATE_HOST_LOGIN_SKIP_CGROUP", "1", 1);
+		setenv("FACEPLATE_HOST_LOGIN_BIN", "/bin/true", 1);
 		_exit(faceplate_host_session_serve_one(conn) == 0 ? 0 : 3);
 	}
 
@@ -85,6 +87,60 @@ START_TEST(test_helper_runs_true_on_pty)
 }
 END_TEST
 
+START_TEST(test_helper_rejects_non_pty)
+{
+	char dir[] = "/tmp/fp-host-XXXXXX";
+	char sock[128];
+	int lfd, sp[2], status;
+	pid_t server, client;
+
+	ck_assert_ptr_nonnull(mkdtemp(dir));
+	snprintf(sock, sizeof(sock), "%s/host-login.sock", dir);
+	lfd = listen_unix(sock);
+
+	server = fork();
+	ck_assert_int_ge(server, 0);
+	if (server == 0) {
+		int conn = accept4(lfd, NULL, NULL, SOCK_CLOEXEC);
+
+		if (conn < 0)
+			_exit(2);
+		setenv("FACEPLATE_HOST_LOGIN_SKIP_CGROUP", "1", 1);
+		setenv("FACEPLATE_HOST_LOGIN_BIN", "/bin/true", 1);
+		_exit(faceplate_host_session_serve_one(conn) == 0 ? 0 : 3);
+	}
+
+	ck_assert_int_eq(socketpair(AF_UNIX, SOCK_STREAM, 0, sp), 0);
+	client = fork();
+	ck_assert_int_ge(client, 0);
+	if (client == 0) {
+		char *argv[] = { "/bin/true", NULL };
+
+		close(lfd);
+		close(sp[1]);
+		if (dup2(sp[0], STDIN_FILENO) < 0)
+			_exit(4);
+		close(sp[0]);
+		setenv("FACEPLATE_HOST_LOGIN_SOCKET", sock, 1);
+		unsetenv("FACEPLATE_HOST_LOGIN");
+		(void)faceplate_host_session_exec(argv);
+		_exit(5);
+	}
+
+	close(sp[0]);
+	close(sp[1]);
+	ck_assert_int_eq(waitpid(client, &status, 0), client);
+	ck_assert(WIFEXITED(status));
+	ck_assert_int_eq(WEXITSTATUS(status), 255);
+	ck_assert_int_eq(waitpid(server, &status, 0), server);
+	ck_assert(WIFEXITED(status));
+	ck_assert_int_eq(WEXITSTATUS(status), 3);
+	close(lfd);
+	unlink(sock);
+	rmdir(dir);
+}
+END_TEST
+
 START_TEST(test_disabled_helper_returns_notsup)
 {
 	char *argv[] = { "/bin/true", NULL };
@@ -97,6 +153,7 @@ END_TEST
 
 TEST_DEFINE_CASE(host_session)
 TEST(test_helper_runs_true_on_pty)
+TEST(test_helper_rejects_non_pty)
 TEST(test_disabled_helper_returns_notsup)
 TEST_END_CASE
 
