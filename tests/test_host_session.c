@@ -4,7 +4,6 @@
 #endif
 #include <errno.h>
 #include <fcntl.h>
-#include <pty.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +15,28 @@
 
 #include "host_session.h"
 #include "test_common.h"
+
+static int open_test_pty(int *master, int *slave)
+{
+	char *name;
+
+	*master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC);
+	if (*master < 0)
+		return -1;
+	if (grantpt(*master) < 0 || unlockpt(*master) < 0)
+		goto fail;
+	name = ptsname(*master);
+	if (!name)
+		goto fail;
+	*slave = open(name, O_RDWR | O_NOCTTY | O_CLOEXEC);
+	if (*slave < 0)
+		goto fail;
+	return 0;
+
+fail:
+	close(*master);
+	return -1;
+}
 
 static int listen_unix(const char *path)
 {
@@ -97,7 +118,7 @@ START_TEST(test_helper_runs_true_on_pty)
 		_exit(faceplate_host_session_serve_one(conn) == 0 ? 0 : 3);
 	}
 
-	ck_assert_int_eq(openpty(&master, &slave, NULL, NULL, NULL), 0);
+	ck_assert_int_eq(open_test_pty(&master, &slave), 0);
 	client = fork();
 	ck_assert_int_ge(client, 0);
 	if (client == 0) {
@@ -199,7 +220,7 @@ START_TEST(test_helper_requires_faceplate_cgroup)
 		_exit(faceplate_host_session_serve_one(conn) == 0 ? 0 : 3);
 	}
 
-	ck_assert_int_eq(openpty(&master, &slave, NULL, NULL, NULL), 0);
+	ck_assert_int_eq(open_test_pty(&master, &slave), 0);
 	client = fork();
 	ck_assert_int_ge(client, 0);
 	if (client == 0) {
