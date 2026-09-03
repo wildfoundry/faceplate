@@ -29,6 +29,9 @@ The PTY child sends only a slave fd over `/run/faceplate/host-login.sock`
 - requires the fd to be a Unix98 PTY slave (`isatty`, char device, major 136)
 - **ignores** client `argv` and environ (no `LD_PRELOAD`, no chosen binary)
 - execs only `/bin/login -p` with a fixed `PATH` and a sanitized `TERM`
+- becomes the session leader and **force-claims** the PTY as controlling TTY
+  (`TIOCSCTTY` with steal); the sandboxed PTY child must not claim CTTY first,
+  or HDMI shells print bash's "no job control" / ioctl warnings
 - fails closed if the helper is missing (no host-namespace fallback)
 
 The helper unit uses `ProtectSystem=strict` and related hardening. It must
