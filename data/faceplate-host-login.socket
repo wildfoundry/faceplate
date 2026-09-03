@@ -1,0 +1,15 @@
+[Unit]
+Description=Faceplate host-namespace login socket
+Documentation=https://github.com/WildFoundry/faceplate
+PartOf=faceplate.service
+
+[Socket]
+ListenStream=/run/faceplate/host-login.sock
+SocketUser=root
+SocketGroup=root
+DirectoryMode=0750
+SocketMode=0600
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

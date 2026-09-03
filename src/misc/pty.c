@@ -37,6 +37,7 @@
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
+#include "host_session.h"
 #include "pty.h"
 #include "shl/eloop.h"
 #include "shl/log.h"
@@ -249,7 +250,15 @@ static void __attribute__((noreturn)) exec_child(const char *term, const char *c
 	if (ret)
 		argv_parsed = argv;
 
-	execve(argv_parsed[0], argv_parsed, environ);
+	/*
+	 * Login must not inherit this process's ProtectSystem/seccomp.
+	 * Do not setns+exec here: joining pid 1's mount namespace from the
+	 * compositor would writeable-escape the sandbox without dropping
+	 * seccomp. Fail closed if the helper is missing.
+	 */
+	ret = faceplate_host_session_exec(argv_parsed);
+	if (ret && ret != -ENOTSUP)
+		log_err("host-login helper unavailable (%d)", -ret);
 
 	log_err("failed to exec child %s: %m", argv[0]);
 
