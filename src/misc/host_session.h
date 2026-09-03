@@ -9,6 +9,8 @@
  * RestrictAddressFamilies). Login shells must not inherit that. The PTY child
  * keeps stdin/stdout/stderr on the slave, then hands the fd to an unsandboxed
  * helper over AF_UNIX + SCM_RIGHTS. systemd seccomp is per-process-tree and
+ * cannot be dropped after fork, so the helper must already be a different unit.
+ *
  * Helper policy (production):
  * - SO_PEERCRED uid must match the helper euid (root)
  * - peer cgroup must contain faceplate.service
@@ -21,11 +23,13 @@
 
 /* Join pid 1 mount/net/uts/ipc namespaces and move to the root cgroup.
  * Best-effort; returns 0 on full success, negative errno otherwise.
+ * The compositor must not use this as a login fallback.
  */
 int faceplate_host_session_enter_init_namespaces(void);
 
 /* Hand the current stdin fd and argv/environ to the helper, then _exit with
- * the helper-reported status. Returns -1 if the helper is unavailable.
+ * the helper-reported status. Returns negative errno if the helper is
+ * unavailable. Payload argv is not what the helper executes.
  */
 int faceplate_host_session_exec(char **argv);
 

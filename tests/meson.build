@@ -104,5 +104,9 @@ test(
     'faceplate_host_session',
     test_host_session,
     protocol: 'tap',
-    env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
+    env: {
+        'CK_TAP_LOG_FILE_NAME': '-',
+        'CK_VERBOSITY': 'silent',
+        'FACEPLATE_SOURCE_ROOT': meson.project_source_root(),
+    },
 )
