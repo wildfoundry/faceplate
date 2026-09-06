@@ -193,8 +193,7 @@ size_t faceplate_sources_ready_count(const struct faceplate_sources *sources)
 	return ready;
 }
 
-int faceplate_sources_rebind_user(struct faceplate_sources *sources, size_t index,
-				  const char *user)
+int faceplate_sources_rebind_user(struct faceplate_sources *sources, size_t index, const char *user)
 {
 	if (!sources || index >= sources->count || !user || !safe_token(user, 63))
 		return -EINVAL;
