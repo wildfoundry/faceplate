@@ -30,6 +30,11 @@ struct faceplate_display_context {
 
 int faceplate_sources_new(struct faceplate_sources **out, const char *manifest_dir);
 void faceplate_sources_free(struct faceplate_sources *sources);
+size_t faceplate_sources_count(const struct faceplate_sources *sources);
+size_t faceplate_sources_ready_count(const struct faceplate_sources *sources);
+/* Test helper: force a later getpwnam retry with a different username. */
+int faceplate_sources_rebind_user(struct faceplate_sources *sources, size_t index,
+				  const char *user);
 void faceplate_sources_refresh(struct faceplate_sources *sources, uint64_t now_boottime_ms,
 			       struct faceplate_display_context *context);
 

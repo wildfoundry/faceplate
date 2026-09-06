@@ -91,6 +91,21 @@ test(
     env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
 )
 
+test_faceplate_sources = executable(
+    'test_faceplate_sources',
+    'test_faceplate_sources.c',
+    '../src/faceplate_sources.c',
+    '../src/faceplate_status.c',
+    include_directories: src_inc,
+    dependencies: [check_deps],
+)
+test(
+    'faceplate_sources',
+    test_faceplate_sources,
+    protocol: 'tap',
+    env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
+)
+
 cc = meson.get_compiler('c')
 util_dep = cc.find_library('util', required: false)
 

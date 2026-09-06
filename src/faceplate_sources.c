@@ -23,8 +23,10 @@ enum source_kind { SOURCE_DATAPLICITY, SOURCE_SYSTEM };
 struct source {
 	enum source_kind kind;
 	char path[256];
+	char user[64];
 	uid_t uid;
 	uint64_t stale_ms;
+	bool ready;
 };
 
 struct faceplate_sources {
@@ -79,6 +81,20 @@ static int read_safe_file_at(int dirfd, const char *name, uid_t uid, char *buf, 
 	return 0;
 }
 
+static bool resolve_source_user(struct source *source)
+{
+	struct passwd *pw;
+
+	if (source->ready)
+		return true;
+	pw = getpwnam(source->user);
+	if (!pw)
+		return false;
+	source->uid = pw->pw_uid;
+	source->ready = true;
+	return true;
+}
+
 static int parse_manifest(int dirfd, const char *name, struct source *out)
 {
 	char buf[MAX_MANIFEST], *line, *save = NULL;
@@ -86,7 +102,7 @@ static int parse_manifest(int dirfd, const char *name, struct source *out)
 	uint64_t stale = DEFAULT_STALE_MS;
 	struct passwd *pw;
 
-	if (read_safe_file_at(dirfd, name, 0, buf, sizeof(buf)))
+	if (read_safe_file_at(dirfd, name, geteuid() == 0 ? 0 : geteuid(), buf, sizeof(buf)))
 		return -EINVAL;
 	for (line = strtok_r(buf, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
 		if (!strncmp(line, "kind=", 5))
@@ -104,9 +120,6 @@ static int parse_manifest(int dirfd, const char *name, struct source *out)
 	if (!safe_token(kind, 24) || !safe_token(user, 63) || strncmp(path, "/run/", 5) ||
 	    !safe_token(path, 255) || stale < 1000 || stale > 3600000)
 		return -EINVAL;
-	pw = getpwnam(user);
-	if (!pw)
-		return -ENOENT;
 	if (!strcmp(kind, "dataplicity"))
 		out->kind = SOURCE_DATAPLICITY;
 	else if (!strcmp(kind, "system"))
@@ -114,8 +127,16 @@ static int parse_manifest(int dirfd, const char *name, struct source *out)
 	else
 		return -EINVAL;
 	memcpy(out->path, path, strlen(path) + 1);
-	out->uid = pw->pw_uid;
+	memcpy(out->user, user, strlen(user) + 1);
 	out->stale_ms = stale;
+	out->uid = 0;
+	out->ready = false;
+	/* Missing users are normal during early boot; keep the source and retry. */
+	pw = getpwnam(user);
+	if (pw) {
+		out->uid = pw->pw_uid;
+		out->ready = true;
+	}
 	return 0;
 }
 
@@ -152,6 +173,35 @@ int faceplate_sources_new(struct faceplate_sources **out, const char *manifest_d
 void faceplate_sources_free(struct faceplate_sources *sources)
 {
 	free(sources);
+}
+
+size_t faceplate_sources_count(const struct faceplate_sources *sources)
+{
+	return sources ? sources->count : 0;
+}
+
+size_t faceplate_sources_ready_count(const struct faceplate_sources *sources)
+{
+	size_t i, ready = 0;
+
+	if (!sources)
+		return 0;
+	for (i = 0; i < sources->count; ++i) {
+		if (sources->items[i].ready)
+			++ready;
+	}
+	return ready;
+}
+
+int faceplate_sources_rebind_user(struct faceplate_sources *sources, size_t index, const char *user)
+{
+	if (!sources || index >= sources->count || !user || !safe_token(user, 63))
+		return -EINVAL;
+	strncpy(sources->items[index].user, user, sizeof(sources->items[index].user) - 1);
+	sources->items[index].user[sizeof(sources->items[index].user) - 1] = '\0';
+	sources->items[index].uid = 0;
+	sources->items[index].ready = false;
+	return 0;
 }
 
 static void append_sep(char *out, size_t cap, size_t *used, const char *sep, const char *piece)
@@ -330,6 +380,8 @@ void faceplate_sources_refresh(struct faceplate_sources *sources, uint64_t now,
 	if (!sources)
 		return;
 	for (i = 0; i < sources->count; ++i) {
+		if (!resolve_source_user(&sources->items[i]))
+			continue;
 		if (sources->items[i].kind == SOURCE_DATAPLICITY)
 			refresh_dataplicity(&sources->items[i], now, context);
 		else if (sources->items[i].kind == SOURCE_SYSTEM)
