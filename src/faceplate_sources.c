@@ -265,6 +265,7 @@ static void refresh_system(const struct source *source, uint64_t now,
 {
 	char path[256], file[64], buf[2048], *slash, *line, *save = NULL;
 	char host[64] = "", os[64] = "", ip[48] = "", slot[32] = "", image[64] = "", boot[24] = "";
+	char channel[24] = "";
 	uint64_t updated = 0, uptime = 0;
 	int fd;
 
@@ -307,6 +308,8 @@ static void refresh_system(const struct source *source, uint64_t now,
 			strncpy(os, value, sizeof(os) - 1);
 		else if (!strcmp(line, "primary_ip"))
 			strncpy(ip, value, sizeof(ip) - 1);
+		else if (!strcmp(line, "build_channel"))
+			strncpy(channel, value, sizeof(channel) - 1);
 		else if (!strcmp(line, "rauc_slot"))
 			strncpy(slot, value, sizeof(slot) - 1);
 		else if (!strcmp(line, "rauc_image"))
@@ -322,6 +325,7 @@ static void refresh_system(const struct source *source, uint64_t now,
 	snprintf(ctx->hostname, sizeof(ctx->hostname), "%s", host);
 	snprintf(ctx->ip, sizeof(ctx->ip), "%s", ip);
 	snprintf(ctx->image, sizeof(ctx->image), "%s", os[0] ? os : (image[0] ? image : ""));
+	snprintf(ctx->build_channel, sizeof(ctx->build_channel), "%s", channel);
 	snprintf(ctx->uptime_label, sizeof(ctx->uptime_label), "Uptime %llus",
 		 (unsigned long long)uptime);
 	snprintf(ctx->rauc_slot, sizeof(ctx->rauc_slot), "%s", slot);
@@ -333,6 +337,7 @@ static void format_display_lines(struct faceplate_display_context *ctx)
 {
 	size_t used = 0;
 	char ip_piece[64] = "", os_piece[80] = "", rauc_piece[80] = "", serial_piece[40] = "";
+	char debug_piece[40] = "";
 
 	/* ASCII separators only — UTF-8 middle dots mojibake on this font path. */
 	static const char sep[] = " | ";
@@ -341,6 +346,8 @@ static void format_display_lines(struct faceplate_display_context *ctx)
 		snprintf(ip_piece, sizeof(ip_piece), "IP %s", ctx->ip);
 	if (ctx->image[0])
 		snprintf(os_piece, sizeof(os_piece), "OS %s", ctx->image);
+	if (ctx->build_channel[0] && !strcmp(ctx->build_channel, "debug"))
+		snprintf(debug_piece, sizeof(debug_piece), "DEBUG BUILD - NOT FOR PRODUCTION");
 	if (ctx->rauc_unhealthy) {
 		snprintf(rauc_piece, sizeof(rauc_piece), "RAUC %s %s",
 			 ctx->rauc_slot[0] ? ctx->rauc_slot : "?",
@@ -351,6 +358,7 @@ static void format_display_lines(struct faceplate_display_context *ctx)
 
 	/* Supporting facts under Online + hostname (no connection token here). */
 	used = 0;
+	append_sep(ctx->supporting_line, sizeof(ctx->supporting_line), &used, sep, debug_piece);
 	append_sep(ctx->supporting_line, sizeof(ctx->supporting_line), &used, sep, ip_piece);
 	append_sep(ctx->supporting_line, sizeof(ctx->supporting_line), &used, sep, os_piece);
 
@@ -358,6 +366,7 @@ static void format_display_lines(struct faceplate_display_context *ctx)
 	used = 0;
 	append_sep(ctx->compact_line, sizeof(ctx->compact_line), &used, sep,
 		   ctx->connection_label[0] ? ctx->connection_label : NULL);
+	append_sep(ctx->compact_line, sizeof(ctx->compact_line), &used, sep, debug_piece);
 	append_sep(ctx->compact_line, sizeof(ctx->compact_line), &used, sep, ip_piece);
 	if (ctx->rauc_unhealthy)
 		append_sep(ctx->compact_line, sizeof(ctx->compact_line), &used, sep, rauc_piece);

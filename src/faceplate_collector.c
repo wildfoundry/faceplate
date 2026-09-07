@@ -68,6 +68,20 @@ static void os_image(char *out, size_t cap)
 	fclose(f);
 }
 
+static void build_channel(char *out, size_t cap)
+{
+	FILE *f = fopen("/etc/dataplicity/build-channel", "re");
+	char line[64];
+	if (!f)
+		return;
+	if (fgets(line, sizeof(line), f)) {
+		line[strcspn(line, "\r\n")] = '\0';
+		if (token_ok(line, 31) && strlen(line) < cap)
+			memcpy(out, line, strlen(line) + 1);
+	}
+	fclose(f);
+}
+
 static unsigned long long uptime_seconds(void)
 {
 	FILE *f = fopen("/proc/uptime", "re");
@@ -254,11 +268,13 @@ out:
 int main(void)
 {
 	char image[64] = "unknown", ip[48] = "unknown", host[64] = "unknown", data[1024];
+	char channel[32] = "";
 	char rauc_slot[32] = "", rauc_image[64] = "", rauc_boot[24] = "";
 	struct timex tx = {0};
 	const char *synced;
 	int n;
 	os_image(image, sizeof(image));
+	build_channel(channel, sizeof(channel));
 	primary_ip(ip, sizeof(ip));
 	device_hostname(host, sizeof(host));
 	rauc_status(rauc_slot, sizeof(rauc_slot), rauc_image, sizeof(rauc_image), rauc_boot,
@@ -272,6 +288,8 @@ int main(void)
 		     "clock_synced=%s\n"
 		     "primary_ip=%s\n",
 		     host, image, uptime_seconds(), synced, ip);
+	if (n > 0 && (size_t)n < sizeof(data) && channel[0])
+		n += snprintf(data + n, sizeof(data) - (size_t)n, "build_channel=%s\n", channel);
 	if (n > 0 && (size_t)n < sizeof(data) && rauc_slot[0]) {
 		n += snprintf(data + n, sizeof(data) - (size_t)n, "rauc_slot=%s\n", rauc_slot);
 		if (n > 0 && (size_t)n < sizeof(data) && rauc_image[0])
