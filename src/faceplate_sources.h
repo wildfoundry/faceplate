@@ -14,6 +14,7 @@ struct faceplate_display_context {
 	char hostname[64];
 	char ip[48];
 	char image[64];
+	char build_channel[24];
 	char connection_label[24];
 	enum faceplate_connection connection;
 	bool connection_alert;
