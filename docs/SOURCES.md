@@ -27,3 +27,9 @@ source is displayed as `Unknown`.
 Faceplate ships the isolated `system` collector. Dataplicity is an external publisher using
 the same contract. Additional integrations require a new allowlisted schema kind rather
 than arbitrary labels or remotely supplied display text.
+
+The `events` kind exposes a bounded curated feed for the inset card while the local
+console is locked. The agent projects Softwares lifecycle lines (started / stopped /
+crashed) and Product Runtime events that carry a `console.text` field. Faceplate
+renders newest-last, one line per event, only as many rows as fit — no scrollback.
+It is not a syslog or journal tail.

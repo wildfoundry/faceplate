@@ -96,12 +96,27 @@ test_faceplate_sources = executable(
     'test_faceplate_sources.c',
     '../src/faceplate_sources.c',
     '../src/faceplate_status.c',
+    '../src/faceplate_events.c',
     include_directories: src_inc,
     dependencies: [check_deps],
 )
 test(
     'faceplate_sources',
     test_faceplate_sources,
+    protocol: 'tap',
+    env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
+)
+
+test_faceplate_events = executable(
+    'test_faceplate_events',
+    'test_faceplate_events.c',
+    '../src/faceplate_events.c',
+    include_directories: src_inc,
+    dependencies: [check_deps],
+)
+test(
+    'faceplate_events',
+    test_faceplate_events,
     protocol: 'tap',
     env: {'CK_TAP_LOG_FILE_NAME': '-', 'CK_VERBOSITY': 'silent'},
 )
