@@ -56,6 +56,7 @@ install_data(
 )
 install_data(
     'data/sources/system.source',
+    'data/sources/events.source',
     install_dir: get_option('prefix') / 'lib/faceplate/sources.d',
 )
 

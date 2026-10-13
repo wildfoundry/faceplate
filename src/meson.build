@@ -52,6 +52,7 @@ kmscon_srcs = [
     'seat.c',
     'config.c',
     'faceplate_status.c',
+    'faceplate_events.c',
     'faceplate_sources.c',
     'main.c',
     'terminal.c',

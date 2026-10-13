@@ -1,0 +1,5 @@
+# Curated operator events (Product Runtime projection). Missing is normal on older images.
+kind=events
+path=/run/dataplicity/faceplate.events
+user=dpagent
+stale_after_ms=60000

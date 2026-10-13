@@ -116,6 +116,8 @@ struct kmscon_terminal {
 	struct faceplate_display_context status_context;
 	char status_line[160];
 	bool status_context_valid;
+	bool events_feed_active;
+	uint64_t events_feed_stamp;
 
 	struct kmscon_asciinema *asciinema;
 };
@@ -125,6 +127,8 @@ struct kmscon_terminal {
 
 static int font_set(struct kmscon_terminal *term);
 static void redraw_all(struct kmscon_terminal *term);
+static int terminal_open(struct kmscon_terminal *term);
+static void terminal_close(struct kmscon_terminal *term);
 
 static uint64_t boottime_ms(void)
 {
@@ -197,11 +201,98 @@ static bool screen_looks_like_login(struct tsm_screen *con)
 	return false;
 }
 
+static bool console_login_allowed(struct kmscon_terminal *term)
+{
+	if (!term->status_context_valid || !term->status_context.events_valid)
+		return true;
+	return !term->status_context.console_locked;
+}
+
+static void render_events_feed(struct kmscon_terminal *term)
+{
+	const struct faceplate_events_snapshot *events = &term->status_context.events;
+	char block[4096];
+	size_t used = 0;
+	unsigned int rows, cols, capacity, start, i;
+
+	/*
+	 * Passive-only card: newest last, no headers, no scroll interaction.
+	 * Keep only as many one-line events as fit in the inset.
+	 */
+	cols = tsm_screen_get_width(term->console);
+	rows = tsm_screen_get_height(term->console);
+	if (!cols)
+		cols = 80;
+	if (!rows)
+		rows = 24;
+	capacity = rows > 1 ? rows - 1 : rows;
+
+	tsm_vte_hard_reset(term->vte);
+	tsm_screen_set_max_sb(term->console, 0);
+	tsm_screen_sb_reset(term->console);
+
+	if (!events->count) {
+		used = (size_t)snprintf(block, sizeof(block),
+					"Waiting for device activity...\r\n");
+		tsm_vte_input(term->vte, block, used);
+	} else {
+		start = 0;
+		if (events->count > capacity)
+			start = (unsigned int)(events->count - capacity);
+		for (i = start; i < events->count; ++i) {
+			const char *text = events->lines[i].text;
+			size_t len = strlen(text);
+			size_t take = len < cols ? len : cols;
+			char line[256];
+
+			if (take >= sizeof(line))
+				take = sizeof(line) - 1;
+			memcpy(line, text, take);
+			line[take] = '\0';
+			used = (size_t)snprintf(block, sizeof(block), "%s\r\n", line);
+			tsm_vte_input(term->vte, block, used);
+		}
+	}
+
+	term->events_feed_stamp = events->updated_boottime_ms;
+	redraw_all(term);
+}
+
+static void reconcile_console_mode(struct kmscon_terminal *term)
+{
+	bool want_feed = term->status_context_valid && term->status_context.events_valid &&
+			 term->status_context.console_locked;
+
+	if (want_feed) {
+		if (term->opened)
+			terminal_close(term);
+		if (!term->events_feed_active ||
+		    term->events_feed_stamp != term->status_context.events.updated_boottime_ms)
+			render_events_feed(term);
+		term->events_feed_active = true;
+		return;
+	}
+
+	if (term->events_feed_active) {
+		term->events_feed_active = false;
+		tsm_screen_set_max_sb(term->console, term->conf->sb_size);
+		tsm_vte_hard_reset(term->vte);
+		if (term->awake && !term->opened)
+			terminal_open(term);
+		else
+			redraw_all(term);
+		return;
+	}
+
+	if (term->awake && !term->opened && console_login_allowed(term))
+		terminal_open(term);
+}
+
 static void apply_faceplate_chrome(struct kmscon_terminal *term)
 {
 	struct shl_dlist *iter;
 	struct screen *scr;
-	bool idle = screen_looks_like_login(term->console);
+	bool idle = term->events_feed_active || screen_looks_like_login(term->console);
 	const struct faceplate_display_context *context = &term->status_context;
 
 	shl_dlist_for_each(iter, &term->screens)
@@ -231,6 +322,7 @@ static void status_event(struct ev_timer *timer, uint64_t count, void *data)
 		sizeof(term->status_line) - 1);
 	term->status_line[sizeof(term->status_line) - 1] = '\0';
 	apply_faceplate_chrome(term);
+	reconcile_console_mode(term);
 	log_notice("faceplate chrome %s status=%s host=%s facts='%s' footer='%s' rauc_alert=%d",
 		   screen_looks_like_login(term->console) ? "idle" : "active",
 		   term->status_context.connection_label, term->status_context.hostname,
@@ -1201,6 +1293,13 @@ static void pointer_event(struct input *input, struct input_pointer_event *ev, v
 		hw_cursor_show(term, ev->pointer_x, ev->pointer_y);
 	}
 
+	/* Feed mode is display-only: no scroll, selection, or mouse tracking. */
+	if (term->events_feed_active) {
+		if (ev->event == POINTER_SYNC)
+			redraw_all(term);
+		return;
+	}
+
 	if (tsm_vte_get_mouse_mode(term->vte) != TSM_MOUSE_TRACK_DISABLE &&
 	    ev->event != POINTER_SYNC) {
 		forward_pointer_event(term, ev);
@@ -1275,6 +1374,8 @@ static int terminal_open(struct kmscon_terminal *term)
 	int ret;
 	unsigned short width, height;
 
+	if (!console_login_allowed(term))
+		return -EPERM;
 	if (term->opened)
 		return -EALREADY;
 
@@ -1320,10 +1421,12 @@ void terminal_activate(struct kmscon_terminal *term)
 		ev_timer_enable(term->blink_timer);
 		ev_timer_enable(term->blink_cursor);
 	}
-	if (!term->opened)
+	if (!term->opened && console_login_allowed(term))
 		terminal_open(term);
-	else
+	else if (term->opened)
 		kmscon_asciinema_resume(term->asciinema);
+	else if (term->events_feed_active)
+		render_events_feed(term);
 
 	terminal_refresh_displays(term);
 }
@@ -1380,7 +1483,8 @@ static void pty_exit(struct kmscon_pty *pty, bool restart, void *data)
 	terminal_close(term);
 
 	if (restart) {
-		terminal_open(term);
+		if (console_login_allowed(term))
+			terminal_open(term);
 		return;
 	}
 

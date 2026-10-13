@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "faceplate_events.h"
 #include "faceplate_status.h"
 
 struct faceplate_sources;
@@ -27,6 +28,10 @@ struct faceplate_display_context {
 	char supporting_line[160];
 	char secondary_line[160];
 	char compact_line[160];
+	/* Curated event feed (inset card when console locked). */
+	bool events_valid;
+	bool console_locked;
+	struct faceplate_events_snapshot events;
 };
 
 int faceplate_sources_new(struct faceplate_sources **out, const char *manifest_dir);

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #include "faceplate_sources.h"
 
+#include "faceplate_events.h"
 #include "faceplate_status.h"
 
 #include <dirent.h>
@@ -18,7 +19,7 @@
 #define MAX_MANIFEST 1024
 #define DEFAULT_STALE_MS 30000
 
-enum source_kind { SOURCE_DATAPLICITY, SOURCE_SYSTEM };
+enum source_kind { SOURCE_DATAPLICITY, SOURCE_SYSTEM, SOURCE_EVENTS };
 
 struct source {
 	enum source_kind kind;
@@ -124,6 +125,8 @@ static int parse_manifest(int dirfd, const char *name, struct source *out)
 		out->kind = SOURCE_DATAPLICITY;
 	else if (!strcmp(kind, "system"))
 		out->kind = SOURCE_SYSTEM;
+	else if (!strcmp(kind, "events"))
+		out->kind = SOURCE_EVENTS;
 	else
 		return -EINVAL;
 	memcpy(out->path, path, strlen(path) + 1);
@@ -333,6 +336,37 @@ static void refresh_system(const struct source *source, uint64_t now,
 	ctx->rauc_unhealthy = slot[0] && boot[0] && !rauc_boot_is_healthy(boot);
 }
 
+static void refresh_events(const struct source *source, uint64_t now,
+			   struct faceplate_display_context *ctx)
+{
+	char path[256], file[64], *slash;
+	struct faceplate_events_snapshot snapshot;
+	int fd;
+
+	if (ctx->events_valid)
+		return;
+
+	strncpy(path, source->path, sizeof(path) - 1);
+	path[sizeof(path) - 1] = '\0';
+	slash = strrchr(path, '/');
+	if (!slash || strcmp(slash + 1, "faceplate.events"))
+		return;
+	strncpy(file, slash + 1, sizeof(file) - 1);
+	*slash = '\0';
+	fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0)
+		return;
+	if (faceplate_events_read_at(fd, source->uid, now, source->stale_ms, &snapshot) ==
+	    FACEPLATE_EVENTS_HIDDEN) {
+		close(fd);
+		return;
+	}
+	close(fd);
+	ctx->events_valid = true;
+	ctx->console_locked = snapshot.console_locked;
+	ctx->events = snapshot;
+}
+
 static void format_display_lines(struct faceplate_display_context *ctx)
 {
 	size_t used = 0;
@@ -395,6 +429,8 @@ void faceplate_sources_refresh(struct faceplate_sources *sources, uint64_t now,
 			refresh_dataplicity(&sources->items[i], now, context);
 		else if (sources->items[i].kind == SOURCE_SYSTEM)
 			refresh_system(&sources->items[i], now, context);
+		else if (sources->items[i].kind == SOURCE_EVENTS)
+			refresh_events(&sources->items[i], now, context);
 	}
 	format_display_lines(context);
 }
