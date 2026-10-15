@@ -31,7 +31,7 @@ START_TEST(test_reads_valid_events_snapshot)
 		ck_assert_int_ge(fd, 0);
 		ck_assert_int_eq(write(fd, valid, strlen(valid)), (ssize_t)strlen(valid));
 		close(fd);
-		fchownat(dirfd, "faceplate.events", geteuid(), -1, 0);
+		ck_assert_int_eq(fchownat(dirfd, "faceplate.events", geteuid(), -1, 0), 0);
 	}
 
 	ck_assert_int_eq(faceplate_events_read_at(dirfd, geteuid(), 5000, 60000, &snapshot),
