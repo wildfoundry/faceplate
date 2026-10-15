@@ -232,8 +232,7 @@ static void render_events_feed(struct kmscon_terminal *term)
 	tsm_screen_sb_reset(term->console);
 
 	if (!events->count) {
-		used = (size_t)snprintf(block, sizeof(block),
-					"Waiting for device activity...\r\n");
+		used = (size_t)snprintf(block, sizeof(block), "Waiting for device activity...\r\n");
 		tsm_vte_input(term->vte, block, used);
 	} else {
 		start = 0;

@@ -108,7 +108,8 @@ static bool split_key(const char *line, size_t len, char *key, size_t key_cap, c
 	return true;
 }
 
-static bool parse_snapshot(const char *bytes, size_t len, struct faceplate_events_snapshot *snapshot)
+static bool parse_snapshot(const char *bytes, size_t len,
+			   struct faceplate_events_snapshot *snapshot)
 {
 	char key[32];
 	const char *value;
@@ -150,7 +151,8 @@ static bool parse_snapshot(const char *bytes, size_t len, struct faceplate_event
 				goto fail;
 			have_console = true;
 		} else if (!strcmp(key, "count")) {
-			if (!parse_u64(value, value_len, &declared) || declared > FACEPLATE_EVENTS_MAX_LINES)
+			if (!parse_u64(value, value_len, &declared) ||
+			    declared > FACEPLATE_EVENTS_MAX_LINES)
 				goto fail;
 			have_count = true;
 		} else if (!strncmp(key, "e", 1)) {
